@@ -97,7 +97,37 @@ jobs:
             -a ./tizen-studio-data/keystore/author/${CERT_NAME}.p12 -p $CERT_PASSWORD
           ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
-      # --- Part D: Commit-based repositories with automatic WGT signing ---
+      # --- Part D: Create expect script (moved outside the loop) ---
+      - name: Create expect script for signing
+        run: |
+          cat > ${GITHUB_WORKSPACE}/package.exp << 'EXPEOF'
+          #!/usr/bin/expect -f
+          set timeout 300
+          set build_dir [lindex $argv 0]
+          spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
+          expect {
+              "Author password:" {
+                  send "$env(CERT_PASSWORD)\r"
+                  exp_continue
+              }
+              "Save author password" {
+                  send "n\r"
+                  exp_continue
+              }
+              "Distributor1 password:" {
+                  send "$env(CERT_PASSWORD)\r"
+                  exp_continue
+              }
+              "Save distributor1 password" {
+                  send "n\r"
+                  exp_continue
+              }
+              eof
+          }
+          EXPEOF
+          chmod +x ${GITHUB_WORKSPACE}/package.exp
+
+      # --- Part E: Commit-based repositories with automatic WGT signing ---
       - name: Check commit-based repositories and build WGT
         run: |
           declare -A repos=(
@@ -125,42 +155,13 @@ jobs:
               case "$repo" in
                 "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen"|"thonythony/fireplace")
                   npm install --no-audit
-                  # Run build/package steps from the user's "runnable" version
                   npm run build || npm run package || true
                   
-                  # Execute the mandatory Tizen web build step
                   ../tizen-studio/tools/ide/bin/tizen build-web
                   
-                  # Create expect script for automated signing (fixes password issue)
-                  cat > package.exp << 'EXPECTEOF'
-#!/usr/bin/expect -f
-set timeout 300
-spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- .
-expect {
-    "Author password:" {
-        send "$env(CERT_PASSWORD)\r"
-        exp_continue
-    }
-    "Save author password" {
-        send "n\r"
-        exp_continue
-    }
-    "Distributor1 password:" {
-        send "$env(CERT_PASSWORD)\r"
-        exp_continue
-    }
-    "Save distributor1 password" {
-        send "n\r"
-        exp_continue
-    }
-    eof
-}
-EXPECTEOF
-                  chmod +x package.exp
-                  ./package.exp
+                  ${GITHUB_WORKSPACE}/package.exp .
                   ;;
                 "KaashDev/TVapp")
-                  # This repo downloads a pre-built WGT, so no build/signing is needed
                   wget -q -O ../wgt_files/TVapp.wgt "https://github.com/KaashDev/TVapp/raw/main/TVapp.wgt"
                   cd ..
                   last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg s "$latest_sha" '.[$r].sha=$s')
@@ -169,7 +170,6 @@ EXPECTEOF
                   ;;
               esac
 
-              # Move WGT files to central folder for repos that were built/signed
               mkdir -p ../wgt_files
               find . -type f -name '*.wgt' -exec cp {} ../wgt_files/ \;
 
@@ -182,7 +182,7 @@ EXPECTEOF
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
-      # --- Part E: Commit cache changes ---
+      # --- Part F: Commit cache changes ---
       - name: Commit cache
         if: env.UPDATED == 'true'
         run: |
@@ -192,7 +192,7 @@ EXPECTEOF
           git commit -m "Update last-seen cache [skip ci]" || true
           git push
 
-      # --- Part F: Create community release ---
+      # --- Part G: Create community release ---
       - name: Generate release tag
         if: env.UPDATED == 'true'
         id: release_tag
