@@ -34,12 +34,16 @@ Each release represents a curated collection of useful, fun, or open-source Tize
 This table lists the applications included in the latest community bundle.  
 Please check the [Releases](../../releases) page for version-specific details.
 
-| 🧩 Application | 📝 Description | 🔗 Source / Link |
+| 🧩 Application | 📝 Description | 🔗 Repository |
 |----------------|----------------|------------------|
-| **Fireplace** | A relaxing video of a crackling fireplace. | [Original Project](#) |
-| **Jellyfin** | The Free Software Media System. | [Jellyfin Official Site](https://jellyfin.org) |
-| **Your App Name** | Brief one-line description. | [Source Link](#) |
-| … | … | … |
+| **Moonlight** | Open-source client for NVIDIA GameStream and Sunshine. | [OneLiberty](https://github.com/OneLiberty/moonlight-chrome-tizen) |
+| **Moonlight (No Gamemode)** | Open-source client for NVIDIA GameStream and Sunshine with gamemode disabled. | [MrPhaze62](https://jellyfin.org](https://github.com/MrPhaze62/moonlight-chrome-tizen-no-gamemode) |
+| **Fireplace** | Transform your Samsung Smart TV into a fireplace. | [thonythony](https://github.com/thonythony/fireplace) |
+| **TVapp** | Enable seamless playback of HLS/m3u8 streams as channels. | [KaashDev](https://github.com/KaashDev/TVapp) |
+| **VLC-Tizen** | VLC for Tizen OS. | [dmaidaniuk](https://github.com/dmaidaniuk/vlc-tizen) |
+| **Twitch** | Twitch client for Samsung Smart TVs 2015 and newer models. | [fgl27](https://github.com/fgl27/smarttv-twitch) |
+| **Club Info Board** | Dé oplossing voor sportverenigingen om wedstrijdinformatie real-time en overzichtelijk te tonen op schermen binnen de club! | [PatrickSt1991](https://github.com/PatrickSt1991/Sportlink.Club.Info.Viewer) |
+| **TizenBrew** | A way to experience modded websites and you can install newer apps without fighting with Tizen Studio. | [reisxd](https://github.com/reisxd/TizenBrew) |
 
 > 💡 Want your app listed here? See the [Contributing](#-contributing--requesting-apps) section below.
 
