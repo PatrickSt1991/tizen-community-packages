@@ -193,12 +193,19 @@ EOF
           git push
 
       # --- Part F: Create community release ---
+      - name: Generate release tag
+        if: env.UPDATED == 'true'
+        id: release_tag
+        run: |
+          echo "TAG=community-${{ github.run_number }}-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+          echo "NAME=Community Package $(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         if: env.UPDATED == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "community-${{ github.run_number }}-$(date +%Y%m%d-%H%M%S)"
-          name: "Community Package $(date +%Y-%m-%d)"
+          tag_name: ${{ steps.release_tag.outputs.TAG }}
+          name: ${{ steps.release_tag.outputs.NAME }}
           files: "wgt_files/*"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
