@@ -132,7 +132,7 @@ jobs:
                   ../tizen-studio/tools/ide/bin/tizen build-web
                   
                   # Create expect script for automated signing (fixes password issue)
-                  cat > package.exp << 'EOF'
+                  cat > package.exp << 'EXPECTEOF'
 #!/usr/bin/expect -f
 set timeout 300
 spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- .
@@ -155,7 +155,7 @@ expect {
     }
     eof
 }
-EOF
+EXPECTEOF
                   chmod +x package.exp
                   ./package.exp
                   ;;
