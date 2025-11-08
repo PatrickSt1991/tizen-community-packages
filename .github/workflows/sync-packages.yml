@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *'  # every 24 hours
   workflow_dispatch:
-    inputs: {} # Ensures the "Run workflow" button appears
+    inputs: {} 
 
 permissions:
   contents: write
@@ -13,37 +13,82 @@ env:
   TIZEN_STUDIO_VER: 5.5
   CERT_NAME: CommunityPack
   CERT_PASSWORD: 1234
+  NODE_OPTIONS: --openssl-legacy-provider
 
 jobs:
-  sync:
+  prepare:
     runs-on: ubuntu-latest
-
+    outputs:
+      tizen_path: ${{ steps.set_tizen_path.outputs.path }}
+      signing_script: ${{ steps.package_exp.outputs.path }}
     steps:
-      # 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Install dependencies
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl
 
-      # 3. Setup directories and cache
-      - name: Setup directories
+      - name: Download Tizen Studio Installer
         run: |
-          mkdir -p wgt_files
-          mkdir -p cache
-          if [ ! -f cache/last_seen.json ]; then
-            echo "{}" > cache/last_seen.json
-          fi
+          curl -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          chmod +x tizen-installer
+          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
+          rm ./tizen-installer
+
+      - name: Create Tizen Certificate
+        run: |
+          mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
+          ./tizen-studio/tools/ide/bin/tizen certificate -a $CERT_NAME -p $CERT_PASSWORD \
+            -c NL -s Community -ct World -o $CERT_NAME -n $CERT_NAME -e community@example.org \
+            -f ${CERT_NAME}
+          ./tizen-studio/tools/ide/bin/tizen security-profiles add -n $CERT_NAME \
+            -a ./tizen-studio-data/keystore/author/${CERT_NAME}.p12 -p $CERT_PASSWORD
+          ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
+
+      - name: Create expect script for signing
+        id: package_exp
+        run: |
+          cat > ${GITHUB_WORKSPACE}/package.exp << 'EXPEOF'
+          #!/usr/bin/expect -f
+          set timeout 300
+          set build_dir [lindex $argv 0]
+          spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
+          expect {
+              "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+              "Save author password" { send "n\r"; exp_continue }
+              "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+              "Save distributor1 password" { send "n\r"; exp_continue }
+              eof
+          }
+          EXPEOF
+          chmod +x ${GITHUB_WORKSPACE}/package.exp
+          echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
+
+      - name: Set Tizen path output
+        id: set_tizen_path
+        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
+
+  sync:
+    runs-on: ubuntu-latest
+    needs: prepare
+    env:
+      TIZEN_PATH: ${{ needs.prepare.outputs.tizen_path }}
+      PACKAGE_EXP: ${{ needs.prepare.outputs.signing_script }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup cache
+        run: |
+          mkdir -p wgt_files cache
+          if [ ! -f cache/last_seen.json ]; then echo "{}" > cache/last_seen.json; fi
 
       - name: Load last seen state
-        id: load_state
-        run: |
-          echo "LAST_SEEN=$(cat cache/last_seen.json)" >> $GITHUB_ENV
+        run: echo "LAST_SEEN=$(cat cache/last_seen.json)" >> $GITHUB_ENV
 
-      # --- Part A: Release-based repositories ---
+      # --- Release-based repos ---
       - name: Check release-based repositories
         run: |
           declare -A repos=(
@@ -54,80 +99,25 @@ jobs:
           )
           last_seen=$(cat cache/last_seen.json)
           updated=false
-
           for repo in "${!repos[@]}"; do
             api="https://api.github.com/repos/$repo/releases/latest"
             latest_tag=$(curl -s $api | jq -r '.tag_name // empty')
             [ -z "$latest_tag" ] && continue
             prev_tag=$(echo "$last_seen" | jq -r --arg r "$repo" '.[$r].tag // empty')
-
             if [ "$latest_tag" != "$prev_tag" ]; then
               echo "🎉 New release for $repo: $latest_tag"
               assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
               for url in $assets; do
-                if [[ "$url" == *.wgt ]]; then
-                  echo "Downloading WGT: $url"
-                  wget -q -P wgt_files "$url"
-                fi
+                [[ "$url" == *.wgt ]] && wget -q -P wgt_files "$url"
               done
               last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg t "$latest_tag" '.[$r].tag=$t')
               updated=true
             fi
           done
-
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
-      # --- Part B: Download Tizen Studio CLI (.bin installer) ---
-      - name: Download Tizen Studio Installer
-        run: |
-          curl -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
-          chmod +x tizen-installer
-          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
-          rm ./tizen-installer
-
-      # --- Part C: Create certificate ---
-      - name: Create Tizen Certificate
-        run: |
-          mkdir -p tizen-studio-data/keystore/author
-          ./tizen-studio/tools/ide/bin/tizen certificate -a $CERT_NAME -p $CERT_PASSWORD \
-            -c NL -s Community -ct World -o $CERT_NAME -n $CERT_NAME -e community@example.org \
-            -f ${CERT_NAME}
-          ./tizen-studio/tools/ide/bin/tizen security-profiles add -n $CERT_NAME \
-            -a ./tizen-studio-data/keystore/author/${CERT_NAME}.p12 -p $CERT_PASSWORD
-          ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
-
-      # --- Part D: Create expect script (moved outside the loop) ---
-      - name: Create expect script for signing
-        run: |
-          cat > ${GITHUB_WORKSPACE}/package.exp << 'EXPEOF'
-          #!/usr/bin/expect -f
-          set timeout 300
-          set build_dir [lindex $argv 0]
-          spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
-          expect {
-              "Author password:" {
-                  send "$env(CERT_PASSWORD)\r"
-                  exp_continue
-              }
-              "Save author password" {
-                  send "n\r"
-                  exp_continue
-              }
-              "Distributor1 password:" {
-                  send "$env(CERT_PASSWORD)\r"
-                  exp_continue
-              }
-              "Save distributor1 password" {
-                  send "n\r"
-                  exp_continue
-              }
-              eof
-          }
-          EXPEOF
-          chmod +x ${GITHUB_WORKSPACE}/package.exp
-
-      # --- Part E: Commit-based repositories with automatic WGT signing ---
+      # --- Commit-based repos ---
       - name: Check commit-based repositories and build WGT
         run: |
           declare -A repos=(
@@ -136,30 +126,22 @@ jobs:
             ["dmaidaniuk/vlc-tizen"]="vlc-tizen"
             ["fgl27/smarttv-twitch"]="smarttv-twitch"
           )
-
           last_seen=$(cat cache/last_seen.json)
           updated=${UPDATED:-false}
-
           for repo in "${!repos[@]}"; do
             api="https://api.github.com/repos/$repo/commits?per_page=1"
             latest_sha=$(curl -s $api | jq -r '.[0].sha // empty')
             [ -z "$latest_sha" ] && continue
             prev_sha=$(echo "$last_seen" | jq -r --arg r "$repo" '.[$r].sha // empty')
-
             if [ "$latest_sha" != "$prev_sha" ]; then
               echo "🔧 New commit for $repo"
               git clone --depth 1 "https://github.com/$repo.git"
               cd "$(basename $repo)"
-
-              # Build or download WGT
               case "$repo" in
                 "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen"|"thonythony/fireplace")
-                  npm install --no-audit
-                  npm run build || npm run package || true
-                  
-                  ../tizen-studio/tools/ide/bin/tizen build-web
-                  
-                  ${GITHUB_WORKSPACE}/package.exp .
+                  [ -f package.json ] && (npm install --no-audit && npm run build || npm run package || true)
+                  $TIZEN_PATH/tools/ide/bin/tizen build-web || true
+                  $PACKAGE_EXP .
                   ;;
                 "KaashDev/TVapp")
                   wget -q -O ../wgt_files/TVapp.wgt "https://github.com/KaashDev/TVapp/raw/main/TVapp.wgt"
@@ -169,20 +151,17 @@ jobs:
                   continue
                   ;;
               esac
-
               mkdir -p ../wgt_files
               find . -type f -name '*.wgt' -exec cp {} ../wgt_files/ \;
-
               cd ..
               last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg s "$latest_sha" '.[$r].sha=$s')
               updated=true
             fi
           done
-
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
-      # --- Part F: Commit cache changes ---
+      # --- Commit cache and release ---
       - name: Commit cache
         if: env.UPDATED == 'true'
         run: |
@@ -192,7 +171,6 @@ jobs:
           git commit -m "Update last-seen cache [skip ci]" || true
           git push
 
-      # --- Part G: Create community release ---
       - name: Generate release tag
         if: env.UPDATED == 'true'
         id: release_tag
