@@ -126,13 +126,15 @@ jobs:
                   npm install --no-audit
                   npm run build || true
                   # Create expect script for automated signing
+                  # We use 'EOF' (quoted) to prevent shell expansion of $env(GITHUB_WORKSPACE)
+                  # The expect script itself will correctly read $env(CERT_PASSWORD)
                   cat > package.exp << 'EOF'
 #!/usr/bin/expect -f
 set timeout 300
 spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- .
 expect {
     "Author password:" {
-        send "1234\r"
+        send "$env(CERT_PASSWORD)\r"
         exp_continue
     }
     "Save author password" {
@@ -140,7 +142,7 @@ expect {
         exp_continue
     }
     "Distributor1 password:" {
-        send "1234\r"
+        send "$env(CERT_PASSWORD)\r"
         exp_continue
     }
     "Save distributor1 password" {
