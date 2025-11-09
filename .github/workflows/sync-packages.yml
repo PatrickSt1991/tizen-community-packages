@@ -223,8 +223,7 @@ jobs:
           export OBJCOPY=/usr/bin/objcopy
           export OBJDUMP=/usr/bin/objdump
 
-          # Patch buildvlc.sh to force native compiler + add verbose output
-          echo "🔧 Patching buildvlc.sh for diagnostics..."
+          # Patch buildvlc.sh for diagnostics + native compiler
           sed -i '1i set -x' buildvlc.sh || true
           sed -i '1i export CC=/usr/bin/gcc; export CXX=/usr/bin/g++; export LD=/usr/bin/ld;' buildvlc.sh || true
           sed -i 's/make -j4/make -j1 V=1/' buildvlc.sh || true
@@ -240,6 +239,19 @@ jobs:
             exit 1
           fi
           echo "✅ Native GCC working properly"
+
+          # --- Fix: ensure configure tests can run properly ---
+          echo "🩹 Forcing writable temp directories for configure checks..."
+          export TMPDIR=/tmp
+          export TEMPDIR=/tmp
+          export CONFIG_SHELL=/bin/bash
+          chmod +x /tmp || true
+
+          # --- Help autoconf assume working host system ---
+          export ac_cv_func_gethostbyname=yes
+          export ac_cv_func_connect=yes
+          export ac_cv_func_getaddrinfo=yes
+          export ac_cv_c_bigendian=no
 
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
