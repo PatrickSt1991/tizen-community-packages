@@ -39,24 +39,20 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install Tizen TV Native SDK and rootstrap
+      - name: Install Tizen 6.5 TV SDK and verify rootstrap
         run: |
-          echo "📦 Installing Tizen TV platform packages..."
+          echo "📦 Installing Tizen 6.5 TV SDK and rootstrap..."
           CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
           chmod +x "$CLI"
 
-          "$CLI" install --accept-license \
-            NativeCLI \
-            TV-Extension-5.5 \
-            TV-Extension-5.5-NativeAppDevelopment \
-            Tizen-5.5-TV
+          "$CLI" install --accept-license Tizen-6.5-TV TV-Extension-6.5 TV-Extension-6.5-NativeAppDevelopment NativeCLI
 
-          echo "✅ Listing available platforms and rootstraps..."
+          echo "✅ Listing available platforms:"
           find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 4 -type d || true
 
-          ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-5.5/tv/rootstraps/tv-5.5-device.core"
+          ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-6.5/tv/rootstraps/tv-6.5-device.core"
           if [ ! -d "$ROOTSTRAP" ]; then
-            echo "❌ Rootstrap missing after install! This must exist: $ROOTSTRAP"
+            echo "❌ Rootstrap not found! Check installation or package names."
             exit 1
           fi
           echo "✅ Found rootstrap: $ROOTSTRAP"
@@ -100,13 +96,13 @@ jobs:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
-          matrix=$(jq -c "{include: [to_entries[] | {
+          matrix=$(jq -c '{include: [to_entries[] | {
             repo: .key,
             branch: .value.branch,
-            build_script: (.value.build_script // \"\"),
-            build_args: (.value.build_args // \"\"),
+            build_script: (.value.build_script // ""),
+            build_args: (.value.build_args // ""),
             skip_npm: (.value.skip_npm // false)
-          }]}" repos-build.json)
+          }]}' repos-build.json)
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   sync:
@@ -116,7 +112,6 @@ jobs:
       release_tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Create unified release tag
         id: tag
         run: |
@@ -129,15 +124,15 @@ jobs:
           jq -c '.releases | to_entries[]' repos-sync.json | while read -r entry; do
             repo=$(echo "$entry" | jq -r '.key')
             api="https://api.github.com/repos/$repo/releases/latest"
-            latest_tag=$(curl -s "$api" | jq -r '.tag_name // empty')
+            latest_tag=$(curl -s $api | jq -r '.tag_name // empty')
             [ -z "$latest_tag" ] && continue
-            assets=$(curl -s "$api" | jq -r '.assets[]?.browser_download_url // empty')
+            assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
             for url in $assets; do
               if [[ "$url" == *.wgt ]]; then
                 username=$(echo "$repo" | cut -d'/' -f1)
                 appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
                 filename="${username}-${appname}.wgt"
-                echo "Downloading $filename"
+                echo "⬇️ Downloading $filename"
                 wget -q -O "wgt_files/$filename" "$url"
               fi
             done
@@ -172,6 +167,7 @@ jobs:
             libasound2-dev libpulse-dev libc6-dev
 
       - name: Clone and build project
+        shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
@@ -192,8 +188,7 @@ jobs:
             'export TMPDIR=/tmp' \
             'export TEMPDIR=/tmp' \
             'export CONFIG_SHELL=/bin/bash' \
-            'exec "$@"' \
-            > /usr/local/bin/run_with_tmpdir
+            'exec "$@"' > /usr/local/bin/run_with_tmpdir
           chmod +x /usr/local/bin/run_with_tmpdir
 
           export CC=/usr/bin/gcc
@@ -214,27 +209,21 @@ jobs:
           fi
           echo "✅ GCC verified under /tmp"
 
-          # --- Only apply native SDK setup if project is VLC ---
-          if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
-            echo "⚙️ Configuring Tizen native SDK environment for VLC..."
-            export TIZEN_VER=5.5
-            export TIZEN_PLATFORM=tv
-            export TIZEN_ARCH=armv7l
-            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
-            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-            export CC=arm-linux-gnueabi-gcc
-            export CXX=arm-linux-gnueabi-g++
-            echo "Using Tizen rootstrap at: $TIZEN_ROOTSTRAP"
-            if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
-              echo "❌ Tizen rootstrap not found for VLC, skipping build."
-              find "$TIZEN_PATH" -maxdepth 4 -type d || true
-              exit 1
-            fi
-          else
-            echo "🌐 Web project detected — skipping native SDK configuration."
+          # --- Tizen SDK environment for TV 6.5 ---
+          export TIZEN_VER=6.5
+          export TIZEN_PLATFORM=tv
+          export TIZEN_ARCH=armv7l
+          export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
+          export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+          export CC=arm-linux-gnueabi-gcc
+          export CXX=arm-linux-gnueabi-g++
+          echo "Using Tizen rootstrap at: $TIZEN_ROOTSTRAP"
+          if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
+            echo "❌ Tizen rootstrap not found!"
+            find "$TIZEN_PATH/platforms" -maxdepth 3 -type d
+            exit 1
           fi
 
-          # --- Build execution ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
             echo "🚀 Running $build_script $build_args..."
@@ -245,7 +234,6 @@ jobs:
             )
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
-            echo "🧱 Building standard web app..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
