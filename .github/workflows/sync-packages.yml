@@ -70,7 +70,6 @@ jobs:
             '  "Save distributor1 password" { send "n\r"; exp_continue }' \
             '  eof' \
             '}' > ${GITHUB_WORKSPACE}/package.exp
-
           chmod +x ${GITHUB_WORKSPACE}/package.exp
           echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
 
@@ -178,8 +177,6 @@ jobs:
             'export TMPDIR=/tmp' \
             'export TEMPDIR=/tmp' \
             'export CONFIG_SHELL=/bin/bash' \
-            'mkdir -p /tmp/autotmp' \
-            'cd /tmp/autotmp || exit 1' \
             'exec "$@"' \
             > /usr/local/bin/run_with_tmpdir
           chmod +x /usr/local/bin/run_with_tmpdir
