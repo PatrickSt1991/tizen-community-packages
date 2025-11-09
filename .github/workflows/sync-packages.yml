@@ -16,11 +16,8 @@ env:
   NODE_OPTIONS: --openssl-legacy-provider
 
 jobs:
-  prepare:
+  sync:
     runs-on: ubuntu-latest
-    outputs:
-      tizen_path: ${{ steps.set_tizen_path.outputs.path }}
-      signing_script: ${{ steps.package_exp.outputs.path }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,15 +38,14 @@ jobs:
       - name: Create Tizen Certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
-          ${{ github.workspace }}/tizen-studio/tools/ide/bin/tizen certificate -a $CERT_NAME -p $CERT_PASSWORD \
+          ${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen certificate -a $CERT_NAME -p $CERT_PASSWORD \
             -c NL -s Community -ct World -o $CERT_NAME -n $CERT_NAME -e community@example.org \
             -f ${CERT_NAME}
-          ${{ github.workspace }}/tizen-studio/tools/ide/bin/tizen security-profiles add -n $CERT_NAME \
+          ${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen security-profiles add -n $CERT_NAME \
             -a ./tizen-studio-data/keystore/author/${CERT_NAME}.p12 -p $CERT_PASSWORD
-          ${{ github.workspace }}/tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
+          ${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
       - name: Create expect script for signing
-        id: package_exp
         run: |
           cat > ${GITHUB_WORKSPACE}/package.exp << 'EXPEOF'
           #!/usr/bin/expect -f
@@ -65,21 +61,6 @@ jobs:
           }
           EXPEOF
           chmod +x ${GITHUB_WORKSPACE}/package.exp
-          echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
-
-      - name: Set Tizen path output
-        id: set_tizen_path
-        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
-
-  sync:
-    runs-on: ubuntu-latest
-    needs: prepare
-    env:
-      TIZEN_PATH: ${{ needs.prepare.outputs.tizen_path }}
-      PACKAGE_EXP: ${{ needs.prepare.outputs.signing_script }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Setup cache
         run: |
@@ -141,14 +122,14 @@ jobs:
               case "$repo" in
                 "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen")
                   [ -f package.json ] && npm install --no-audit
-                  $TIZEN_PATH/tools/ide/bin/tizen build-web || true
-                  $PACKAGE_EXP .
+                  ${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen build-web || true
+                  ${GITHUB_WORKSPACE}/package.exp .
                   ;;
                 "thonythony/fireplace")
                   [ -f package.json ] && npm install --no-audit
                   npx webpack --mode production --no-watch
-                  $TIZEN_PATH/tools/ide/bin/tizen build-web || true
-                  $PACKAGE_EXP .
+                  ${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen build-web || true
+                  ${GITHUB_WORKSPACE}/package.exp .
                   ;;
                 "KaashDev/TVapp")
                   wget -q -O ../wgt_files/TVapp.wgt "https://github.com/KaashDev/TVapp/raw/main/TVapp.wgt"
