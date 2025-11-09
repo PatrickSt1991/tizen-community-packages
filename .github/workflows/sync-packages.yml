@@ -205,7 +205,7 @@ jobs:
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
             echo "Running $build_script $build_args..."
-            run_with_tmpdir "./$build_script" $build_args || (
+            run_with_tmpdir "$PWD/$build_script" $build_args || (
               echo "Build failed, dumping config.log..."
               find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \;
               exit 1
