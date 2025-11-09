@@ -2,9 +2,9 @@ name: Sync Tizen Community Packages
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'  # every 24 hours
   workflow_dispatch:
-    inputs: {} 
+    inputs: {}
 
 permissions:
   contents: write
@@ -37,9 +37,8 @@ jobs:
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
 
-      - name: Fix Tizen Studio permissions
-        run: |
-          chmod -R +x ${GITHUB_WORKSPACE}/tizen-studio
+      - name: Make Tizen CLI executable
+        run: chmod +x "${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen"
 
       - name: Create Tizen Certificate
         run: |
@@ -58,7 +57,7 @@ jobs:
           #!/usr/bin/expect -f
           set timeout 300
           set build_dir [lindex $argv 0]
-          spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
+          spawn $env(GITHUB_PATH)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
           expect {
               "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
               "Save author password" { send "n\r"; exp_continue }
@@ -110,9 +109,7 @@ jobs:
             if [ "$latest_tag" != "$prev_tag" ]; then
               echo "🎉 New release for $repo: $latest_tag"
               assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
-              for url in $assets; do
-                [[ "$url" == *.wgt ]] && wget -q -P wgt_files "$url"
-              done
+              for url in $assets; do [[ "$url" == *.wgt ]] && wget -q -P wgt_files "$url"; done
               last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg t "$latest_tag" '.[$r].tag=$t')
               updated=true
             fi
@@ -141,13 +138,8 @@ jobs:
               cd "$(basename $repo)"
               case "$repo" in
                 "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen"|"thonythony/fireplace")
-                  if [ -f package.json ]; then
-                    npm install --no-audit
-                    npm run build -- --mode=production --no-watch || npm run package || true
-                  fi
-                  chmod +x $TIZEN_PATH/tools/ide/bin/tizen
+                  [ -f package.json ] && (npm install --no-audit && npm run build || npm run package || true)
                   $TIZEN_PATH/tools/ide/bin/tizen build-web || true
-                  chmod +x $PACKAGE_EXP
                   $PACKAGE_EXP .
                   ;;
                 "KaashDev/TVapp")
@@ -190,4 +182,3 @@ jobs:
         with:
           tag_name: ${{ steps.release_tag.outputs.TAG }}
           name: ${{ steps.release_tag.outputs.NAME }}
-          files: "wgt_files/*"
