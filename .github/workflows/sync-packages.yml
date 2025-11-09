@@ -15,6 +15,8 @@ env:
   NODE_OPTIONS: --openssl-legacy-provider
   TIZEN_PATH: ${{ github.workspace }}/tizen-studio
   PACKAGE_EXP: ${{ github.workspace }}/package.exp
+  RELEASE_TAG: community-${{ github.run_number }}
+  RELEASE_NAME: "Community Packages ${{ github.run_number }}"
 
 jobs:
   prepare:
@@ -38,6 +40,15 @@ jobs:
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
+
+      - name: Install Native SDK components (for VLC)
+        run: |
+          echo "📦 Installing Tizen Native SDK toolchains..."
+          $GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin install \
+            NativeCLI NativeToolchain-GCC-armv7hl NativeToolchain-GCC-x86 NativeToolchain-GCC-x86_64 \
+            NativeToolchain-GCC-aarch64 NativeToolchain-GCC-armel
+          echo "✅ Native SDK toolchains installed."
+          $GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin list
 
       - name: Create Tizen Certificate
         run: |
@@ -101,6 +112,9 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     needs: prepare
+    env:
+      RELEASE_TAG: ${{ env.RELEASE_TAG }}
+      RELEASE_NAME: ${{ env.RELEASE_NAME }}
     steps:
       - uses: actions/checkout@v4
 
@@ -117,22 +131,47 @@ jobs:
           chmod -R +x tizen-studio/tools/ide/bin || true
           chmod +x package.exp || true
 
-      - name: Setup cache
+      - name: Download release-based WGTs
         run: |
-          mkdir -p wgt_files cache
-          if [ ! -f cache/last_seen.json ]; then echo "{}" > cache/last_seen.json; fi
+          mkdir -p wgt_files
+          declare -A repos=(
+            ["OneLiberty/moonlight-chrome-tizen"]="release"
+            ["MrPhaze62/moonlight-chrome-tizen-no-gamemode"]="release"
+            ["PatrickSt1991/Sportlink.Club.Info.Viewer"]="release"
+            ["reisxd/TizenBrew"]="release"
+          )
+          for repo in "${!repos[@]}"; do
+            api="https://api.github.com/repos/$repo/releases/latest"
+            latest_tag=$(curl -s $api | jq -r '.tag_name // empty')
+            [ -z "$latest_tag" ] && continue
+            assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
+            for url in $assets; do
+              if [[ "$url" == *.wgt ]]; then
+                username=$(echo "$repo" | cut -d'/' -f1)
+                appname=$(basename "$repo" | sed 's/-tizen//;s/-no-gamemode//;s/-chrome//;s/-//g;')
+                filename="${username}-${appname}.wgt"
+                echo "⬇️ Downloading $filename"
+                wget -q -O "wgt_files/$filename" "$url"
+              fi
+            done
+          done
 
-      # (sync logic here as before)
-
-      - name: Cleanup workspace
-        if: always()
-        run: |
-          echo "🧹 Cleaning up workspace..."
-          rm -rf tizen-studio-data build cache/tmp || true
+      - name: Upload WGTS to unified release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          files: "wgt_files/*.wgt"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   tizen-build:
     runs-on: ubuntu-latest
     needs: [prepare, generate-matrix-build]
+    env:
+      RELEASE_TAG: ${{ env.RELEASE_TAG }}
+      RELEASE_NAME: ${{ env.RELEASE_NAME }}
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
     steps:
@@ -162,8 +201,10 @@ jobs:
           build_script="${{ matrix.build_script }}"
           build_args="${{ matrix.build_args }}"
           skip_npm="${{ matrix.skip_npm }}"
-          repo_dir=$(basename $repo)
-          echo "Building $repo (branch: $branch, build_script: $build_script, build_args: $build_args, skip_npm: $skip_npm)"
+          username=$(echo "$repo" | cut -d'/' -f1)
+          appname=$(basename "$repo" | sed 's/-tizen//;s/-no-gamemode//;s/-chrome//;s/-//g;')
+          output_name="${username}-${appname}.wgt"
+          echo "Building $repo (branch: $branch) → $output_name"
 
           n=0
           until [ $n -ge 3 ]; do
@@ -173,44 +214,43 @@ jobs:
             sleep 5
           done
 
-          cd "$repo_dir" || { echo "❌ Failed to enter cloned repo directory"; exit 1; }
+          cd "$(basename "$repo")" || { echo "❌ Failed to enter cloned repo directory"; exit 1; }
 
-          # --- Environment setup ---
           export TIZEN_SDK="$TIZEN_PATH"
           export TIZEN_STUDIO="$TIZEN_PATH"
-          echo "TIZEN_SDK set to: $TIZEN_SDK"
+          export SYSROOT="$TIZEN_PATH/platforms/tizen-5.5/mobile/rootstraps/mobile-5.5-device.core"
+          export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
 
-          # --- Build logic ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
-            echo "Detected custom build script: $build_script"
             chmod +x "$build_script"
             if [ -n "$build_args" ]; then
-              echo "Running $build_script with args: $build_args"
               "./$build_script" $build_args || { echo "❌ $build_script failed"; exit 1; }
             else
               "./$build_script" || { echo "❌ $build_script failed"; exit 1; }
             fi
-            find . -name "*.wgt" -exec cp {} ../../wgt_files/ \;
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           elif [ "$skip_npm" = "true" ]; then
-            echo "Skipping npm build as requested"
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
-            find . -name "*.wgt" -exec cp {} ../../wgt_files/ \;
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           elif [ -f package.json ]; then
             npm ci --ignore-scripts --no-audit || npm install --no-audit
             npm run build --if-present || npm run package --if-present || true
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
-            find . -name "*.wgt" -exec cp {} ../../wgt_files/ \;
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
-            echo "No package.json or custom script found, running default Tizen build"
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
-            find . -name "*.wgt" -exec cp {} ../../wgt_files/ \;
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           fi
 
-      - name: Cleanup build and temp files
-        if: always()
-        run: |
-          echo "🧹 Cleaning up build directories..."
-          rm -rf build tizen-studio-data cache/tmp || true
+      - name: Upload WGTS to unified release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          files: "wgt_files/*.wgt"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
