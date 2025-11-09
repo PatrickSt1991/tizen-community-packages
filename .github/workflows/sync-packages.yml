@@ -137,9 +137,22 @@ jobs:
               echo "🔧 New commit for $repo"
               git clone --depth 1 "https://github.com/$repo.git"
               cd "$(basename $repo)"
+
+              # Build or download WGT
               case "$repo" in
                 "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen"|"thonythony/fireplace")
-                  [ -f package.json ] && (npm install --no-audit && npm run build || npm run package || true)
+                  npm install --no-audit
+                  # FIXED: run webpack only once (no watch mode)
+                  if npm run | grep -q "build"; then
+                    echo "Running build (forcing single-run mode)..."
+                    npm run build --if-present -- --mode=production --no-watch || true
+                  elif npm run | grep -q "package"; then
+                    echo "Running package script..."
+                    npm run package || true
+                  else
+                    echo "No build or package script found, skipping"
+                  fi
+
                   $TIZEN_PATH/tools/ide/bin/tizen build-web || true
                   $PACKAGE_EXP .
                   ;;
