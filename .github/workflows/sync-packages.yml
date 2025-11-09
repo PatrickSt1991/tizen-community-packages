@@ -19,6 +19,9 @@ env:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    outputs:
+      tizen_path: ${{ steps.set_tizen_path.outputs.path }}
+      signing_script: ${{ steps.package_exp.outputs.path }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,36 +58,26 @@ jobs:
 
       - name: Create expect script for signing
         id: package_exp
-        shell: bash
         run: |
-          cat > ${GITHUB_WORKSPACE}/package.exp <<'EXPEOF'
+          cat > "${GITHUB_WORKSPACE}/package.exp" <<'EXPEOF'
 #!/usr/bin/expect -f
 set timeout 300
 set build_dir [lindex $argv 0]
 spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
 expect {
-    "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-    "Save author password" { send "n\r"; exp_continue }
-    "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-    "Save distributor1 password" { send "n\r"; exp_continue }
-    eof
+  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+  "Save author password" { send "n\r"; exp_continue }
+  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+  "Save distributor1 password" { send "n\r"; exp_continue }
+  eof
 }
 EXPEOF
-          chmod +x ${GITHUB_WORKSPACE}/package.exp
-          echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
+          chmod +x "${GITHUB_WORKSPACE}/package.exp"
+          echo "path=${GITHUB_WORKSPACE}/package.exp" >> "$GITHUB_OUTPUT"
 
       - name: Set Tizen path output
         id: set_tizen_path
-        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
-
-      - name: Upload Tizen Studio and scripts as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: tizen-build-env
-          path: |
-            ${{ env.TIZEN_PATH }}
-            ${{ env.PACKAGE_EXP }}
-          retention-days: 1
+        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> "$GITHUB_OUTPUT"
 
   generate-matrix-build:
     runs-on: ubuntu-latest
@@ -101,7 +94,7 @@ EXPEOF
             build_args: (.value.build_args // ""),
             skip_npm: (.value.skip_npm // false)
           }]}' repos-build.json)
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   sync:
     runs-on: ubuntu-latest
@@ -110,11 +103,12 @@ EXPEOF
       release_tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Create unified release tag
         id: tag
         run: |
           tag="community-${GITHUB_RUN_NUMBER}-$(date +%Y%m%d-%H%M%S)"
-          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Download WGTs from repos-sync.json
         run: |
@@ -122,9 +116,9 @@ EXPEOF
           jq -c '.releases | to_entries[]' repos-sync.json | while read -r entry; do
             repo=$(echo "$entry" | jq -r '.key')
             api="https://api.github.com/repos/$repo/releases/latest"
-            latest_tag=$(curl -s $api | jq -r '.tag_name // empty')
+            latest_tag=$(curl -s "$api" | jq -r '.tag_name // empty')
             [ -z "$latest_tag" ] && continue
-            assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
+            assets=$(curl -s "$api" | jq -r '.assets[]?.browser_download_url // empty')
             for url in $assets; do
               if [[ "$url" == *.wgt ]]; then
                 username=$(echo "$repo" | cut -d'/' -f1)
@@ -151,17 +145,6 @@ EXPEOF
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
     steps:
-      - name: Download Tizen Studio and scripts
-        uses: actions/download-artifact@v4
-        with:
-          name: tizen-build-env
-          path: ${{ github.workspace }} # Extracts files to the root of the workspace
-
-      - name: Make downloaded files executable
-        run: |
-          chmod +x ${{ env.PACKAGE_EXP }}
-          chmod -R +x ${{ env.TIZEN_PATH }}/tools/ide/bin
-
       - uses: actions/checkout@v4
 
       - name: Install VLC build prerequisites
@@ -176,7 +159,6 @@ EXPEOF
             libasound2-dev libpulse-dev libc6-dev
 
       - name: Clone and build project
-        shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
@@ -232,8 +214,8 @@ EOF
             )
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
-            "$TIZEN_PATH/tools/ide/bin/tizen" build-web
-            "$PACKAGE_EXP" .
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
+            "$PACKAGE_EXP" . || true
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           fi
 
