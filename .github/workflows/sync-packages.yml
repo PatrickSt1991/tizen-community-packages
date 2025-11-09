@@ -15,8 +15,6 @@ env:
   NODE_OPTIONS: --openssl-legacy-provider
   TIZEN_PATH: ${{ github.workspace }}/tizen-studio
   PACKAGE_EXP: ${{ github.workspace }}/package.exp
-  RELEASE_TAG: community-${{ github.run_number }}
-  RELEASE_NAME: "Community Packages ${{ github.run_number }}"
 
 jobs:
   prepare:
@@ -48,7 +46,6 @@ jobs:
             NativeCLI NativeToolchain-GCC-armv7hl NativeToolchain-GCC-x86 NativeToolchain-GCC-x86_64 \
             NativeToolchain-GCC-aarch64 NativeToolchain-GCC-armel
           echo "✅ Native SDK toolchains installed."
-          $GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin list
 
       - name: Create Tizen Certificate
         run: |
@@ -112,9 +109,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     needs: prepare
-    env:
-      RELEASE_TAG: ${{ env.RELEASE_TAG }}
-      RELEASE_NAME: ${{ env.RELEASE_NAME }}
+    outputs:
+      release_tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -126,10 +122,12 @@ jobs:
             package.exp
           key: tizen-${{ env.TIZEN_STUDIO_VER }}-${{ runner.os }}
 
-      - name: Restore permissions for Tizen tools
+      - name: Create unified release tag
+        id: tag
         run: |
-          chmod -R +x tizen-studio/tools/ide/bin || true
-          chmod +x package.exp || true
+          tag="community-${GITHUB_RUN_NUMBER}-$(date +%Y%m%d-%H%M%S)"
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "Using unified release tag: $tag"
 
       - name: Download release-based WGTs
         run: |
@@ -148,7 +146,7 @@ jobs:
             for url in $assets; do
               if [[ "$url" == *.wgt ]]; then
                 username=$(echo "$repo" | cut -d'/' -f1)
-                appname=$(basename "$repo" | sed 's/-tizen//;s/-no-gamemode//;s/-chrome//;s/-//g;')
+                appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
                 filename="${username}-${appname}.wgt"
                 echo "⬇️ Downloading $filename"
                 wget -q -O "wgt_files/$filename" "$url"
@@ -157,21 +155,17 @@ jobs:
           done
 
       - name: Upload WGTS to unified release
-        if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: ${{ env.RELEASE_NAME }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Community Packages ${{ github.run_number }}"
           files: "wgt_files/*.wgt"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   tizen-build:
     runs-on: ubuntu-latest
-    needs: [prepare, generate-matrix-build]
-    env:
-      RELEASE_TAG: ${{ env.RELEASE_TAG }}
-      RELEASE_NAME: ${{ env.RELEASE_NAME }}
+    needs: [prepare, generate-matrix-build, sync]
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
     steps:
@@ -185,13 +179,6 @@ jobs:
             package.exp
           key: tizen-${{ env.TIZEN_STUDIO_VER }}-${{ runner.os }}
 
-      - name: Restore permissions and verify setup
-        run: |
-          chmod -R +x tizen-studio/tools/ide/bin || true
-          chmod +x package.exp || true
-          test -x tizen-studio/tools/ide/bin/tizen || { echo "❌ Tizen binary missing"; exit 1; }
-          test -x package.exp || { echo "❌ package.exp missing"; exit 1; }
-
       - name: Clone and build project
         run: |
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
@@ -202,19 +189,11 @@ jobs:
           build_args="${{ matrix.build_args }}"
           skip_npm="${{ matrix.skip_npm }}"
           username=$(echo "$repo" | cut -d'/' -f1)
-          appname=$(basename "$repo" | sed 's/-tizen//;s/-no-gamemode//;s/-chrome//;s/-//g;')
+          appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
           output_name="${username}-${appname}.wgt"
-          echo "Building $repo (branch: $branch) → $output_name"
 
-          n=0
-          until [ $n -ge 3 ]; do
-            git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git" && break
-            n=$((n+1))
-            echo "Retrying clone... ($n)"
-            sleep 5
-          done
-
-          cd "$(basename "$repo")" || { echo "❌ Failed to enter cloned repo directory"; exit 1; }
+          git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git"
+          cd "$(basename "$repo")" || exit 1
 
           export TIZEN_SDK="$TIZEN_PATH"
           export TIZEN_STUDIO="$TIZEN_PATH"
@@ -223,21 +202,7 @@ jobs:
 
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
-            if [ -n "$build_args" ]; then
-              "./$build_script" $build_args || { echo "❌ $build_script failed"; exit 1; }
-            else
-              "./$build_script" || { echo "❌ $build_script failed"; exit 1; }
-            fi
-            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
-          elif [ "$skip_npm" = "true" ]; then
-            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-            "$PACKAGE_EXP" . || true
-            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
-          elif [ -f package.json ]; then
-            npm ci --ignore-scripts --no-audit || npm install --no-audit
-            npm run build --if-present || npm run package --if-present || true
-            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-            "$PACKAGE_EXP" . || true
+            "./$build_script" $build_args || exit 1
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
@@ -246,11 +211,10 @@ jobs:
           fi
 
       - name: Upload WGTS to unified release
-        if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: ${{ env.RELEASE_NAME }}
+          tag_name: ${{ needs.sync.outputs.release_tag }}
+          name: "Community Packages ${{ github.run_number }}"
           files: "wgt_files/*.wgt"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
