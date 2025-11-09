@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *'  # every 24 hours
   workflow_dispatch:
-    inputs: {} 
+    inputs: {}
 
 permissions:
   contents: write
@@ -36,17 +36,17 @@ jobs:
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
-          chmod +x "${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen"
+          chmod -R +x "${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin"
 
       - name: Create Tizen Certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
-          ./tizen-studio/tools/ide/bin/tizen certificate -a $CERT_NAME -p $CERT_PASSWORD \
+          ${{ github.workspace }}/tizen-studio/tools/ide/bin/tizen certificate -a $CERT_NAME -p $CERT_PASSWORD \
             -c NL -s Community -ct World -o $CERT_NAME -n $CERT_NAME -e community@example.org \
             -f ${CERT_NAME}
-          ./tizen-studio/tools/ide/bin/tizen security-profiles add -n $CERT_NAME \
+          ${{ github.workspace }}/tizen-studio/tools/ide/bin/tizen security-profiles add -n $CERT_NAME \
             -a ./tizen-studio-data/keystore/author/${CERT_NAME}.p12 -p $CERT_PASSWORD
-          ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
+          ${{ github.workspace }}/tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
       - name: Create expect script for signing
         id: package_exp
@@ -139,8 +139,14 @@ jobs:
               git clone --depth 1 "https://github.com/$repo.git"
               cd "$(basename $repo)"
               case "$repo" in
-                "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen"|"thonythony/fireplace")
-                  [ -f package.json ] && (npm install --no-audit && npm run build || npm run package || true)
+                "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen")
+                  [ -f package.json ] && (npm install --no-audit)
+                  $TIZEN_PATH/tools/ide/bin/tizen build-web || true
+                  $PACKAGE_EXP .
+                  ;;
+                "thonythony/fireplace")
+                  [ -f package.json ] && npm install --no-audit
+                  npx webpack --mode production
                   $TIZEN_PATH/tools/ide/bin/tizen build-web || true
                   $PACKAGE_EXP .
                   ;;
