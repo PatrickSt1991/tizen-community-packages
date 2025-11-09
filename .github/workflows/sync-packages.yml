@@ -59,19 +59,18 @@ jobs:
       - name: Create expect script for signing
         id: package_exp
         run: |
-          cat > ${GITHUB_WORKSPACE}/package.exp <<'EXPEOF'
-#!/usr/bin/expect -f
-set timeout 300
-set build_dir [lindex $argv 0]
-spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
-expect {
-  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-  "Save author password" { send "n\r"; exp_continue }
-  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-  "Save distributor1 password" { send "n\r"; exp_continue }
-  eof
-}
-EXPEOF
+          printf '%s\n' '#!/usr/bin/expect -f' \
+            'set timeout 300' \
+            'set build_dir [lindex $argv 0]' \
+            'spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' \
+            'expect {' \
+            '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' \
+            '  "Save author password" { send "n\r"; exp_continue }' \
+            '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' \
+            '  "Save distributor1 password" { send "n\r"; exp_continue }' \
+            '  eof' \
+            '}' > ${GITHUB_WORKSPACE}/package.exp
+
           chmod +x ${GITHUB_WORKSPACE}/package.exp
           echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
 
