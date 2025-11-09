@@ -174,15 +174,14 @@ jobs:
           cd "$(basename "$repo")" || exit 1
 
           echo "Creating noexec-safe wrapper..."
-          cat >/usr/local/bin/run_with_tmpdir <<'EOF'
-#!/bin/bash
-export TMPDIR=/tmp
-export TEMPDIR=/tmp
-export CONFIG_SHELL=/bin/bash
-mkdir -p /tmp/autotmp
-cd /tmp/autotmp || exit 1
-exec "$@"
-EOF
+          printf '%s\n' '#!/bin/bash' \
+            'export TMPDIR=/tmp' \
+            'export TEMPDIR=/tmp' \
+            'export CONFIG_SHELL=/bin/bash' \
+            'mkdir -p /tmp/autotmp' \
+            'cd /tmp/autotmp || exit 1' \
+            'exec "$@"' \
+            > /usr/local/bin/run_with_tmpdir
           chmod +x /usr/local/bin/run_with_tmpdir
 
           export CC=/usr/bin/gcc
