@@ -2,9 +2,9 @@ name: Sync Tizen Community Packages
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'  # every 24 hours
   workflow_dispatch:
-    inputs: {}
+    inputs: {} 
 
 permissions:
   contents: write
@@ -30,12 +30,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl
 
-      - name: Download and Install Tizen Studio
+      - name: Download and install Tizen Studio
         run: |
           mkdir -p tizen-studio
           curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
           chmod +x tizen-installer
-          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
+          ./tizen-installer --accept-license ./tizen-studio
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
@@ -82,13 +82,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup cache
+      - name: Setup cache and folders
         run: |
-          mkdir -p wgt_files cache
+          mkdir -p wgt_files cache build
           if [ ! -f cache/last_seen.json ]; then echo "{}" > cache/last_seen.json; fi
 
       - name: Load last seen state
-        run: echo "LAST_SEEN=$(cat cache/last_seen.json)" >> $GITHUB_ENV
+        run: echo "LAST_SEEN=$(cat cache/last_seen.json | jq -c .)" >> $GITHUB_ENV
 
       # --- Release-based repos ---
       - name: Check release-based repositories
@@ -111,7 +111,7 @@ jobs:
               assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
               for url in $assets; do
                 if [[ "$url" == *.wgt ]]; then
-                  filename=$(echo $repo | sed 's|/|-|g').wgt
+                  filename="$(echo $repo | tr / -).wgt"
                   wget -q -O wgt_files/$filename "$url"
                 fi
               done
@@ -122,26 +122,46 @@ jobs:
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
-      # --- Non-Tizen commit-based repos ---
-      - name: Check commit-based repositories (non-Tizen)
+      # --- Commit-based repos ---
+      - name: Check commit-based repositories and build WGT
         run: |
           declare -A repos=(
+            ["thonythony/fireplace"]="fireplace"
             ["KaashDev/TVapp"]="TVapp"
+            ["dmaidaniuk/vlc-tizen"]="vlc-tizen"
+            ["fgl27/smarttv-twitch"]="smarttv-twitch"
           )
           last_seen=$(cat cache/last_seen.json)
           updated=${UPDATED:-false}
+
           for repo in "${!repos[@]}"; do
-            api="https://api.github.com/repos/$repo/commits?per_page=1"
-            latest_sha=$(curl -s $api | jq -r '.[0].sha // empty')
+            latest_sha=$(curl -s "https://api.github.com/repos/$repo/commits?per_page=1" | jq -r '.[0].sha // empty')
             [ -z "$latest_sha" ] && continue
             prev_sha=$(echo "$last_seen" | jq -r --arg r "$repo" '.[$r].sha // empty')
             if [ "$latest_sha" != "$prev_sha" ]; then
               echo "🔧 New commit for $repo"
-              wget -q -O wgt_files/$(echo $repo | sed 's|/|-|g').wgt "https://github.com/$repo/raw/main/${repos[$repo]}.wgt"
+              git clone --depth 1 "https://github.com/$repo.git" build/$(basename $repo)
+              cd build/$(basename $repo)
+
+              # Build if package.json exists
+              if [ -f package.json ]; then
+                npm install --no-audit
+                npm run build --if-present || npm run package --if-present || true
+                $TIZEN_PATH/tools/ide/bin/tizen build-web || true
+                $PACKAGE_EXP .
+              fi
+
+              mkdir -p ../../wgt_files
+              for wgt in $(find . -type f -name '*.wgt'); do
+                filename="$(echo $repo | tr / -).wgt"
+                cp "$wgt" "../../wgt_files/$filename"
+              done
+              cd ../..
               last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg s "$latest_sha" '.[$r].sha=$s')
               updated=true
             fi
           done
+
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
@@ -169,34 +189,3 @@ jobs:
           tag_name: ${{ steps.release_tag.outputs.TAG }}
           name: ${{ steps.release_tag.outputs.NAME }}
           files: "wgt_files/*"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  tizen-build:
-    runs-on: ubuntu-latest
-    needs: prepare
-    env:
-      TIZEN_PATH: ${{ needs.prepare.outputs.tizen_path }}
-      PACKAGE_EXP: ${{ needs.prepare.outputs.signing_script }}
-    strategy:
-      matrix:
-        repo: ["thonythony/fireplace","dmaidaniuk/vlc-tizen","fgl27/smarttv-twitch"]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup build directories
-        run: |
-          mkdir -p wgt_files build
-          cd build
-          git clone --depth 1 "https://github.com/${{ matrix.repo }}.git"
-          cd "$(basename ${{ matrix.repo }})"
-
-      - name: Install and build
-        run: |
-          [ -f package.json ] && npm install --no-audit
-          npm run build --if-present || npm run package --if-present || true
-          $TIZEN_PATH/tools/ide/bin/tizen build-web || true
-          $PACKAGE_EXP .
-          filename=$(echo "${{ matrix.repo }}" | sed 's|/|-|g').wgt
-          mv *.wgt ../../wgt_files/$filename
