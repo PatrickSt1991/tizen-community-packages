@@ -59,20 +59,21 @@ jobs:
 
       - name: Create expect script for signing
         id: package_exp
+        shell: bash
         run: |
-          cat > ${GITHUB_WORKSPACE}/package.exp << 'EXPEOF'
-          #!/usr/bin/expect -f
-          set timeout 300
-          set build_dir [lindex $argv 0]
-          spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
-          expect {
-              "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-              "Save author password" { send "n\r"; exp_continue }
-              "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-              "Save distributor1 password" { send "n\r"; exp_continue }
-              eof
-          }
-          EXPEOF
+          cat > ${GITHUB_WORKSPACE}/package.exp <<'EXPEOF'
+#!/usr/bin/expect -f
+set timeout 300
+set build_dir [lindex $argv 0]
+spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
+expect {
+    "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+    "Save author password" { send "n\r"; exp_continue }
+    "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+    "Save distributor1 password" { send "n\r"; exp_continue }
+    eof
+}
+EXPEOF
           chmod +x ${GITHUB_WORKSPACE}/package.exp
           echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
 
@@ -184,6 +185,7 @@ jobs:
             libasound2-dev libpulse-dev libc6-dev
 
       - name: Clone and build project
+        shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
@@ -199,25 +201,26 @@ jobs:
           git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git"
           cd "$(basename "$repo")" || exit 1
 
-          # --- Prepare environment for Tizen cross-compilation ---
+          # --- Environment setup ---
           export TIZEN_SDK="$TIZEN_PATH"
           export TIZEN_STUDIO="$TIZEN_PATH"
           export SYSROOT="$TIZEN_PATH/platforms/tizen-5.5/mobile/rootstraps/mobile-5.5-device.core"
           export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:/usr/bin:$PATH"
 
-          # --- Fix for GitHub runner 'noexec' mount ---
-          echo "🧩 Applying workaround for noexec build directories..."
-          cat > /usr/local/bin/run_with_tmpdir <<'EOF'
+          # --- Workaround for GitHub runner 'noexec' mount ---
+          echo "🧩 Creating noexec-safe wrapper..."
+          cat >/usr/local/bin/run_with_tmpdir <<'EOF'
 #!/bin/bash
 export TMPDIR=/tmp
 export TEMPDIR=/tmp
 export CONFIG_SHELL=/bin/bash
-mkdir -p /tmp/autotmp && cd /tmp/autotmp
+mkdir -p /tmp/autotmp
+cd /tmp/autotmp || exit 1
 exec "$@"
 EOF
           chmod +x /usr/local/bin/run_with_tmpdir
 
-          # Force autoconf to believe this is a native x86_64 build
+          # --- Compiler sanity + environment ---
           export CC=/usr/bin/gcc
           export CXX=/usr/bin/g++
           export CONFIG_SHELL=/bin/bash
@@ -228,7 +231,6 @@ EOF
           export ac_cv_func_getaddrinfo=yes
           export ac_cv_c_bigendian=no
 
-          # Sanity check that gcc can compile & run from /tmp
           echo 'int main(){return 0;}' > /tmp/test.c
           gcc /tmp/test.c -o /tmp/test.out
           if [ ! -x /tmp/test.out ]; then
@@ -237,12 +239,13 @@ EOF
           fi
           echo "✅ GCC verified under /tmp"
 
+          # --- Run build ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
-            echo "🚀 Starting $build_script $build_args with noexec-safe wrapper..."
+            echo "🚀 Running $build_script $build_args with wrapper..."
             run_with_tmpdir "./$build_script" $build_args || (
-              echo "❌ buildvlc.sh failed, dumping config.log for debugging..." ;
-              find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \; ;
+              echo "❌ Build failed, dumping config.log..."
+              find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \;
               exit 1
             )
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
