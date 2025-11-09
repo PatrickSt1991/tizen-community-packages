@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *'  # every 24 hours
   workflow_dispatch:
-    inputs: {} 
+    inputs: {}
 
 permissions:
   contents: write
@@ -30,8 +30,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl
 
+      # ✅ Cache Tizen Studio installation
+      - name: Cache Tizen Studio
+        id: cache-tizen
+        uses: actions/cache@v4
+        with:
+          path: tizen-studio
+          key: tizen-studio-${{ env.TIZEN_STUDIO_VER }}
+
       - name: Download Tizen Studio Installer
+        if: steps.cache-tizen.outputs.cache-hit != 'true'
         run: |
+          echo "Installing Tizen Studio $TIZEN_STUDIO_VER..."
           curl -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
@@ -70,15 +80,31 @@ jobs:
         id: set_tizen_path
         run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
 
+      # Upload so sync job can reuse it
+      - name: Upload Tizen Studio & signing script
+        uses: actions/upload-artifact@v4
+        with:
+          name: tizen-tools
+          path: |
+            tizen-studio
+            package.exp
+
   sync:
     runs-on: ubuntu-latest
     needs: prepare
-    env:
-      TIZEN_PATH: ${{ needs.prepare.outputs.tizen_path }}
-      PACKAGE_EXP: ${{ needs.prepare.outputs.signing_script }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Download Tizen Studio & signing script
+        uses: actions/download-artifact@v4
+        with:
+          name: tizen-tools
+
+      - name: Set paths for Tizen tools
+        run: |
+          echo "TIZEN_PATH=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_ENV
+          echo "PACKAGE_EXP=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_ENV
 
       - name: Setup cache
         run: |
@@ -137,22 +163,12 @@ jobs:
               echo "🔧 New commit for $repo"
               git clone --depth 1 "https://github.com/$repo.git"
               cd "$(basename $repo)"
-
-              # Build or download WGT
               case "$repo" in
                 "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen"|"thonythony/fireplace")
-                  npm install --no-audit
-                  # FIXED: run webpack only once (no watch mode)
-                  if npm run | grep -q "build"; then
-                    echo "Running build (forcing single-run mode)..."
-                    npm run build --if-present -- --mode=production --no-watch || true
-                  elif npm run | grep -q "package"; then
-                    echo "Running package script..."
-                    npm run package || true
-                  else
-                    echo "No build or package script found, skipping"
+                  if [ -f package.json ]; then
+                    npm install --no-audit
+                    npm run build --if-present -- --mode=production --no-watch || npm run package || true
                   fi
-
                   $TIZEN_PATH/tools/ide/bin/tizen build-web || true
                   $PACKAGE_EXP .
                   ;;
