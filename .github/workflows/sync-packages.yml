@@ -88,7 +88,13 @@ jobs:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
-          matrix=$(jq -c '{include: [to_entries[] | {repo: .key, branch: .value.branch, build_script: (.value.build_script // ""), skip_npm: (.value.skip_npm // false)}]}' repos-build.json)
+          matrix=$(jq -c '{include: [to_entries[] | {
+            repo: .key,
+            branch: .value.branch,
+            build_script: (.value.build_script // ""),
+            build_args: (.value.build_args // ""),
+            skip_npm: (.value.skip_npm // false)
+          }]}' repos-build.json)
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
           echo "Generated matrix: $matrix"
 
@@ -154,9 +160,10 @@ jobs:
           repo="${{ matrix.repo }}"
           branch="${{ matrix.branch }}"
           build_script="${{ matrix.build_script }}"
+          build_args="${{ matrix.build_args }}"
           skip_npm="${{ matrix.skip_npm }}"
           repo_dir=$(basename $repo)
-          echo "Building $repo (branch: $branch, build_script: $build_script, skip_npm: $skip_npm)"
+          echo "Building $repo (branch: $branch, build_script: $build_script, build_args: $build_args, skip_npm: $skip_npm)"
 
           n=0
           until [ $n -ge 3 ]; do
@@ -177,7 +184,12 @@ jobs:
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             echo "Detected custom build script: $build_script"
             chmod +x "$build_script"
-            "./$build_script" || { echo "❌ $build_script failed"; exit 1; }
+            if [ -n "$build_args" ]; then
+              echo "Running $build_script with args: $build_args"
+              "./$build_script" $build_args || { echo "❌ $build_script failed"; exit 1; }
+            else
+              "./$build_script" || { echo "❌ $build_script failed"; exit 1; }
+            fi
             find . -name "*.wgt" -exec cp {} ../../wgt_files/ \;
           elif [ "$skip_npm" = "true" ]; then
             echo "Skipping npm build as requested"
