@@ -39,6 +39,28 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
+      - name: Install Tizen TV Native SDK and rootstrap
+        run: |
+          echo "📦 Installing Tizen TV platform packages..."
+          CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
+          chmod +x "$CLI"
+
+          "$CLI" install --accept-license \
+            NativeCLI \
+            TV-Extension-5.5 \
+            TV-Extension-5.5-NativeAppDevelopment \
+            Tizen-5.5-TV
+
+          echo "✅ Listing available platforms and rootstraps..."
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 4 -type d || true
+
+          ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-5.5/tv/rootstraps/tv-5.5-device.core"
+          if [ ! -d "$ROOTSTRAP" ]; then
+            echo "❌ Rootstrap missing after install! This must exist: $ROOTSTRAP"
+            exit 1
+          fi
+          echo "✅ Found rootstrap: $ROOTSTRAP"
+
       - name: Create Tizen Certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
