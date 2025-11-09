@@ -39,25 +39,6 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install Native SDK components (TV rootstrap)
-        run: |
-          echo "📦 Installing Tizen SDK components for TV..."
-          mkdir -p "$GITHUB_WORKSPACE/tizen-studio/platforms"
-          $GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin install --accept-license \
-            NativeCLI \
-            NativeToolchain-GCC-armv7hl \
-            NativeToolchain-GCC-x86 \
-            NativeToolchain-GCC-x86_64 \
-            NativeToolchain-GCC-aarch64 \
-            NativeToolchain-GCC-armel \
-            Tizen-5.5-TV \
-            TV-Extension-5.5 \
-            TV-Extension-5.5-NativeAppDevelopment \
-            TV-5.5-NativeAppDevelopment
-
-          echo "✅ Installed TV SDK. Checking for rootstrap..."
-          find $GITHUB_WORKSPACE/tizen-studio/platforms -maxdepth 5 -type d || true
-
       - name: Create Tizen Certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
@@ -206,36 +187,43 @@ jobs:
           echo 'int main(){return 0;}' > /tmp/test.c
           gcc /tmp/test.c -o /tmp/test.out
           if [ ! -x /tmp/test.out ]; then
-            echo "GCC sanity check under /tmp failed!"
+            echo "❌ GCC sanity check under /tmp failed!"
             exit 1
           fi
-          echo "GCC verified under /tmp"
+          echo "✅ GCC verified under /tmp"
 
-          # --- Tizen SDK environment for TV build ---
-          export TIZEN_VER=5.5
-          export TIZEN_PLATFORM=tv
-          export TIZEN_ARCH=armv7l
-          export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
-          export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-          export CC=arm-linux-gnueabi-gcc
-          export CXX=arm-linux-gnueabi-g++
-          echo "Using Tizen rootstrap at: $TIZEN_ROOTSTRAP"
-          if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
-            echo "❌ Tizen rootstrap not found, showing available platforms..."
-            find "$TIZEN_PATH/platforms" -maxdepth 3 -type d
-            exit 1
+          # --- Only apply native SDK setup if project is VLC ---
+          if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
+            echo "⚙️ Configuring Tizen native SDK environment for VLC..."
+            export TIZEN_VER=5.5
+            export TIZEN_PLATFORM=tv
+            export TIZEN_ARCH=armv7l
+            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
+            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+            export CC=arm-linux-gnueabi-gcc
+            export CXX=arm-linux-gnueabi-g++
+            echo "Using Tizen rootstrap at: $TIZEN_ROOTSTRAP"
+            if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
+              echo "❌ Tizen rootstrap not found for VLC, skipping build."
+              find "$TIZEN_PATH" -maxdepth 4 -type d || true
+              exit 1
+            fi
+          else
+            echo "🌐 Web project detected — skipping native SDK configuration."
           fi
 
+          # --- Build execution ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
-            echo "Running $build_script $build_args..."
+            echo "🚀 Running $build_script $build_args..."
             run_with_tmpdir "$PWD/$build_script" $build_args || (
-              echo "Build failed, dumping config.log..."
+              echo "❌ Build failed, dumping config.log..."
               find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \;
               exit 1
             )
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
+            echo "🧱 Building standard web app..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
