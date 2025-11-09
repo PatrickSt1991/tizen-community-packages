@@ -116,7 +116,7 @@ jobs:
           mkdir -p wgt_files cache
           if [ ! -f cache/last_seen.json ]; then echo "{}" > cache/last_seen.json; fi
 
-      # (sync logic unchanged for brevity)
+      # (sync logic here as before)
 
       - name: Cleanup workspace
         if: always()
@@ -167,6 +167,11 @@ jobs:
           done
 
           cd "$repo_dir" || { echo "❌ Failed to enter cloned repo directory"; exit 1; }
+
+          # --- Environment setup ---
+          export TIZEN_SDK="$TIZEN_PATH"
+          export TIZEN_STUDIO="$TIZEN_PATH"
+          echo "TIZEN_SDK set to: $TIZEN_SDK"
 
           # --- Build logic ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
