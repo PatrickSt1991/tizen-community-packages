@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  TIZEN_STUDIO_VER: 5.5
+  TIZEN_STUDIO_VER: 6.5
   CERT_NAME: CommunityPack
   CERT_PASSWORD: 1234
   NODE_OPTIONS: --openssl-legacy-provider
@@ -28,34 +28,27 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget zip git jq nodejs npm expect curl
+          sudo apt-get install -y wget zip git jq nodejs npm expect curl unzip
 
       - name: Download and Install Tizen Studio
         run: |
           mkdir -p tizen-studio
-          curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_5.5/web-cli_Tizen_Studio_5.5_ubuntu-64.bin"
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install Tizen 6.5 TV SDK and verify rootstrap
+      - name: Install Tizen 6.5 SDK base components
         run: |
-          echo "📦 Installing Tizen 6.5 TV SDK and rootstrap..."
+          echo "📦 Installing base Tizen 6.5 SDK..."
           CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
           chmod +x "$CLI"
 
-          "$CLI" install --accept-license Tizen-6.5-TV TV-Extension-6.5 TV-Extension-6.5-NativeAppDevelopment NativeCLI
+          "$CLI" install --accept-license WebCLI NativeCLI Tizen-6.5-Mobile Tizen-6.5-Wearable
 
-          echo "✅ Listing available platforms:"
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 4 -type d || true
-
-          ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-6.5/tv/rootstraps/tv-6.5-device.core"
-          if [ ! -d "$ROOTSTRAP" ]; then
-            echo "❌ Rootstrap not found! Check installation or package names."
-            exit 1
-          fi
-          echo "✅ Found rootstrap: $ROOTSTRAP"
+          echo "✅ Base SDK installed. Listing available platforms..."
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 3 -type d || true
 
       - name: Create Tizen Certificate
         run: |
@@ -69,18 +62,21 @@ jobs:
 
       - name: Create expect script for signing
         id: package_exp
+        shell: bash
         run: |
-          printf '%s\n' '#!/usr/bin/expect -f' \
-            'set timeout 300' \
-            'set build_dir [lindex $argv 0]' \
-            'spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' \
-            'expect {' \
-            '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' \
-            '  "Save author password" { send "n\r"; exp_continue }' \
-            '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' \
-            '  "Save distributor1 password" { send "n\r"; exp_continue }' \
-            '  eof' \
-            '}' > ${GITHUB_WORKSPACE}/package.exp
+          cat > ${GITHUB_WORKSPACE}/package.exp <<'EXPEOF'
+#!/usr/bin/expect -f
+set timeout 300
+set build_dir [lindex $argv 0]
+spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
+expect {
+    "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+    "Save author password" { send "n\r"; exp_continue }
+    "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+    "Save distributor1 password" { send "n\r"; exp_continue }
+    eof
+}
+EXPEOF
           chmod +x ${GITHUB_WORKSPACE}/package.exp
           echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
 
@@ -166,6 +162,19 @@ jobs:
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
+      - name: Install Samsung TV Extension 6.5.3 (only for VLC)
+        if: ${{ contains(matrix.repo, 'vlc-tizen') }}
+        run: |
+          echo "📺 Installing Samsung TV Extension 6.5.3 (Ubuntu 64-bit)..."
+          mkdir -p "$GITHUB_WORKSPACE/tizen-tv-ext"
+          cd "$GITHUB_WORKSPACE/tizen-tv-ext"
+          curl -L -o tizen-tv-extension_6.5_ubuntu-64.bin "https://developer.samsung.com/smarttv/file/8574c902-7540-412a-b8f0-ac2636006ac7"
+          chmod +x tizen-tv-extension_6.5_ubuntu-64.bin
+          ./tizen-tv-extension_6.5_ubuntu-64.bin --accept-license "$GITHUB_WORKSPACE/tizen-studio"
+
+          echo "✅ Verifying TV rootstrap..."
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-6.5" -maxdepth 3 -type d || true
+
       - name: Clone and build project
         shell: bash
         run: |
@@ -175,7 +184,6 @@ jobs:
           branch="${{ matrix.branch }}"
           build_script="${{ matrix.build_script }}"
           build_args="${{ matrix.build_args }}"
-          skip_npm="${{ matrix.skip_npm }}"
           username=$(echo "$repo" | cut -d'/' -f1)
           appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
           output_name="${username}-${appname}.wgt"
@@ -196,39 +204,27 @@ jobs:
           export CONFIG_SHELL=/bin/bash
           export TMPDIR=/tmp
           export TEMPDIR=/tmp
-          export ac_cv_func_gethostbyname=yes
-          export ac_cv_func_connect=yes
-          export ac_cv_func_getaddrinfo=yes
-          export ac_cv_c_bigendian=no
 
           echo 'int main(){return 0;}' > /tmp/test.c
           gcc /tmp/test.c -o /tmp/test.out
-          if [ ! -x /tmp/test.out ]; then
-            echo "❌ GCC sanity check under /tmp failed!"
-            exit 1
-          fi
-          echo "✅ GCC verified under /tmp"
+          [ -x /tmp/test.out ] && echo "✅ GCC verified under /tmp" || exit 1
 
-          # --- Tizen SDK environment for TV 6.5 ---
-          export TIZEN_VER=6.5
-          export TIZEN_PLATFORM=tv
-          export TIZEN_ARCH=armv7l
-          export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
-          export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-          export CC=arm-linux-gnueabi-gcc
-          export CXX=arm-linux-gnueabi-g++
-          echo "Using Tizen rootstrap at: $TIZEN_ROOTSTRAP"
-          if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
-            echo "❌ Tizen rootstrap not found!"
-            find "$TIZEN_PATH/platforms" -maxdepth 3 -type d
-            exit 1
+          if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
+            export TIZEN_VER=6.5
+            export TIZEN_PLATFORM=tv
+            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
+            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+            export CC=arm-linux-gnueabi-gcc
+            export CXX=arm-linux-gnueabi-g++
+            echo "⚙️ Configuring for Tizen TV rootstrap..."
+            [ ! -d "$TIZEN_ROOTSTRAP" ] && echo "❌ Missing TV rootstrap!" && exit 1
           fi
 
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
-            echo "🚀 Running $build_script $build_args..."
-            run_with_tmpdir "$PWD/$build_script" $build_args || (
-              echo "❌ Build failed, dumping config.log..."
+            echo "Running $build_script $build_args..."
+            run_with_tmpdir "./$build_script" $build_args || (
+              echo "Build failed, dumping config.log..."
               find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \;
               exit 1
             )
