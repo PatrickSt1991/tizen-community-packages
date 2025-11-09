@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
-          matrix=$(jq -c 'to_entries | map({repo: .key, branch: .value})' repos-build.json)
+          matrix=$(jq -c '{include: [to_entries[] | {repo: .key, branch: .value}]}' repos-build.json)
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
           echo "Generated matrix: $matrix"
 
@@ -111,10 +111,10 @@ jobs:
 
       - name: Load repos from JSON
         run: |
-          releases=$(jq -r '.releases | to_entries[] | "\(.key) \(.value)"' repos-sync.json)
-          commits=$(jq -r '.commits | to_entries[] | "\(.key) \(.value)"' repos-sync.json)
-          echo "Release repos:"; echo "$releases"
-          echo "Commit repos:"; echo "$commits"
+          echo "Release repos:"
+          jq -r '.releases | to_entries[] | "\(.key) \(.value)"' repos-sync.json || echo "No release repos"
+          echo "Commit repos:"
+          jq -r '.commits | to_entries[] | "\(.key) \(.value)"' repos-sync.json || echo "No commit repos"
 
       # --- Release-based repositories ---
       - name: Check release-based repositories
