@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  TIZEN_STUDIO_VER: 6.5
+  TIZEN_STUDIO_VER: 5.5
   CERT_NAME: CommunityPack
   CERT_PASSWORD: 1234
   NODE_OPTIONS: --openssl-legacy-provider
@@ -30,59 +30,54 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl unzip
 
-      - name: Download and Install Tizen Studio
+      - name: Download and Install Tizen Studio 5.5
         run: |
           mkdir -p tizen-studio
-          curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_5.5/web-cli_Tizen_Studio_5.5_ubuntu-64.bin"
+          curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install Tizen 6.5 SDK base components
+      - name: Install base SDK components (Web/Native CLI)
         run: |
-          echo "📦 Installing base Tizen 6.5 SDK..."
           CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
           chmod +x "$CLI"
-
-          "$CLI" install --accept-license WebCLI NativeCLI Tizen-6.5-Mobile Tizen-6.5-Wearable
-
-          echo "✅ Base SDK installed. Listing available platforms..."
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 3 -type d || true
+          "$CLI" install --accept-license WebCLI NativeCLI
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 2 -type d || true
 
       - name: Create Tizen Certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
-          ./tizen-studio/tools/ide/bin/tizen certificate -a $CERT_NAME -p $CERT_PASSWORD \
-            -c NL -s Community -ct World -o $CERT_NAME -n $CERT_NAME -e community@example.org \
-            -f ${CERT_NAME}
-          ./tizen-studio/tools/ide/bin/tizen security-profiles add -n $CERT_NAME \
-            -a ./tizen-studio-data/keystore/author/${CERT_NAME}.p12 -p $CERT_PASSWORD
+          ./tizen-studio/tools/ide/bin/tizen certificate -a "$CERT_NAME" -p "$CERT_PASSWORD" \
+            -c NL -s Community -ct World -o "$CERT_NAME" -n "$CERT_NAME" -e community@example.org -f "$CERT_NAME"
+          ./tizen-studio/tools/ide/bin/tizen security-profiles add -n "$CERT_NAME" \
+            -a "./tizen-studio-data/keystore/author/${CERT_NAME}.p12" -p "$CERT_PASSWORD"
           ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
       - name: Create expect script for signing
         id: package_exp
         shell: bash
         run: |
-          cat > ${GITHUB_WORKSPACE}/package.exp <<'EXPEOF'
+          cat > "${GITHUB_WORKSPACE}/package.exp" <<'EXPEOF'
 #!/usr/bin/expect -f
 set timeout 300
 set build_dir [lindex $argv 0]
 spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
 expect {
-    "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-    "Save author password" { send "n\r"; exp_continue }
-    "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-    "Save distributor1 password" { send "n\r"; exp_continue }
-    eof
+  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+  "Save author password" { send "n\r"; exp_continue }
+  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
+  "Save distributor1 password" { send "n\r"; exp_continue }
+  eof
 }
 EXPEOF
-          chmod +x ${GITHUB_WORKSPACE}/package.exp
-          echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
+          chmod +x "${GITHUB_WORKSPACE}/package.exp"
+          echo "path=${GITHUB_WORKSPACE}/package.exp" >> "$GITHUB_OUTPUT"
 
       - name: Set Tizen path output
         id: set_tizen_path
-        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
+        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> "$GITHUB_OUTPUT"
 
   generate-matrix-build:
     runs-on: ubuntu-latest
@@ -99,7 +94,7 @@ EXPEOF
             build_args: (.value.build_args // ""),
             skip_npm: (.value.skip_npm // false)
           }]}' repos-build.json)
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   sync:
     runs-on: ubuntu-latest
@@ -108,11 +103,12 @@ EXPEOF
       release_tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Create unified release tag
         id: tag
         run: |
           tag="community-${GITHUB_RUN_NUMBER}-$(date +%Y%m%d-%H%M%S)"
-          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Download WGTs from repos-sync.json
         run: |
@@ -120,15 +116,14 @@ EXPEOF
           jq -c '.releases | to_entries[]' repos-sync.json | while read -r entry; do
             repo=$(echo "$entry" | jq -r '.key')
             api="https://api.github.com/repos/$repo/releases/latest"
-            latest_tag=$(curl -s $api | jq -r '.tag_name // empty')
+            latest_tag=$(curl -s "$api" | jq -r '.tag_name // empty')
             [ -z "$latest_tag" ] && continue
-            assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
+            assets=$(curl -s "$api" | jq -r '.assets[]?.browser_download_url // empty')
             for url in $assets; do
               if [[ "$url" == *.wgt ]]; then
                 username=$(echo "$repo" | cut -d'/' -f1)
                 appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
                 filename="${username}-${appname}.wgt"
-                echo "⬇️ Downloading $filename"
                 wget -q -O "wgt_files/$filename" "$url"
               fi
             done
@@ -162,18 +157,15 @@ EXPEOF
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
-      - name: Install Samsung TV Extension 6.5.3 (only for VLC)
+      - name: Install Samsung TV Extension 6.5.3 (only for vlc-tizen)
         if: ${{ contains(matrix.repo, 'vlc-tizen') }}
         run: |
-          echo "📺 Installing Samsung TV Extension 6.5.3 (Ubuntu 64-bit)..."
-          mkdir -p "$GITHUB_WORKSPACE/tizen-tv-ext"
-          cd "$GITHUB_WORKSPACE/tizen-tv-ext"
-          curl -L -o tizen-tv-extension_6.5_ubuntu-64.bin "https://developer.samsung.com/smarttv/file/8574c902-7540-412a-b8f0-ac2636006ac7"
-          chmod +x tizen-tv-extension_6.5_ubuntu-64.bin
-          ./tizen-tv-extension_6.5_ubuntu-64.bin --accept-license "$GITHUB_WORKSPACE/tizen-studio"
-
-          echo "✅ Verifying TV rootstrap..."
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-6.5" -maxdepth 3 -type d || true
+          mkdir -p "$GITHUB_WORKSPACE/tv-ext"
+          cd "$GITHUB_WORKSPACE/tv-ext"
+          curl -L -o tv-ext.bin "https://developer.samsung.com/smarttv/file/8574c902-7540-412a-b8f0-ac2636006ac7"
+          chmod +x tv-ext.bin
+          ./tv-ext.bin --accept-license "$GITHUB_WORKSPACE/tizen-studio"
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 3 -type d || true
 
       - name: Clone and build project
         shell: bash
@@ -191,7 +183,6 @@ EXPEOF
           git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git"
           cd "$(basename "$repo")" || exit 1
 
-          echo "Creating noexec-safe wrapper..."
           printf '%s\n' '#!/bin/bash' \
             'export TMPDIR=/tmp' \
             'export TEMPDIR=/tmp' \
@@ -207,7 +198,7 @@ EXPEOF
 
           echo 'int main(){return 0;}' > /tmp/test.c
           gcc /tmp/test.c -o /tmp/test.out
-          [ -x /tmp/test.out ] && echo "✅ GCC verified under /tmp" || exit 1
+          [ -x /tmp/test.out ] || exit 1
 
           if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
             export TIZEN_VER=6.5
@@ -216,13 +207,14 @@ EXPEOF
             export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
             export CC=arm-linux-gnueabi-gcc
             export CXX=arm-linux-gnueabi-g++
-            echo "⚙️ Configuring for Tizen TV rootstrap..."
-            [ ! -d "$TIZEN_ROOTSTRAP" ] && echo "❌ Missing TV rootstrap!" && exit 1
+            if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
+              echo "Missing TV rootstrap: $TIZEN_ROOTSTRAP"
+              exit 1
+            fi
           fi
 
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
-            echo "Running $build_script $build_args..."
             run_with_tmpdir "./$build_script" $build_args || (
               echo "Build failed, dumping config.log..."
               find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \;
