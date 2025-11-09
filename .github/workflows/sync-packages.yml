@@ -4,7 +4,6 @@ on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
-    inputs: {}
 
 permissions:
   contents: write
@@ -24,8 +23,7 @@ jobs:
       tizen_path: ${{ steps.set_tizen_path.outputs.path }}
       signing_script: ${{ steps.package_exp.outputs.path }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -82,12 +80,23 @@ jobs:
             tizen-studio/
             package.exp
 
+  generate-matrix-build:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          matrix=$(jq -c 'to_entries | map({repo: .key, branch: .value})' repos-build.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Generated matrix: $matrix"
+
   sync:
     runs-on: ubuntu-latest
     needs: prepare
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Download Tizen Studio and signing script
         uses: actions/download-artifact@v4
@@ -100,18 +109,20 @@ jobs:
           mkdir -p wgt_files cache
           if [ ! -f cache/last_seen.json ]; then echo "{}" > cache/last_seen.json; fi
 
-      # --- Release-based repos ---
+      - name: Load repos from JSON
+        run: |
+          releases=$(jq -r '.releases | to_entries[] | "\(.key) \(.value)"' repos-sync.json)
+          commits=$(jq -r '.commits | to_entries[] | "\(.key) \(.value)"' repos-sync.json)
+          echo "Release repos:"; echo "$releases"
+          echo "Commit repos:"; echo "$commits"
+
+      # --- Release-based repositories ---
       - name: Check release-based repositories
         run: |
-          declare -A repos=(
-            ["OneLiberty/moonlight-chrome-tizen"]="release"
-            ["MrPhaze62/moonlight-chrome-tizen-no-gamemode"]="release"
-            ["PatrickSt1991/Sportlink.Club.Info.Viewer"]="release"
-            ["reisxd/TizenBrew"]="release"
-          )
           last_seen=$(cat cache/last_seen.json)
           updated=false
-          for repo in "${!repos[@]}"; do
+          while read -r repo type; do
+            [ -z "$repo" ] && continue
             api="https://api.github.com/repos/$repo/releases/latest"
             latest_tag=$(curl -s $api | jq -r '.tag_name // empty')
             [ -z "$latest_tag" ] && continue
@@ -128,32 +139,31 @@ jobs:
               last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg t "$latest_tag" '.[$r].tag=$t')
               updated=true
             fi
-          done
+          done <<< "$(jq -r '.releases | to_entries[] | "\(.key) \(.value)"' repos-sync.json)"
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
-      # --- Non-Tizen commit-based repos ---
-      - name: Check commit-based repositories (non-Tizen)
+      # --- Commit-based repositories ---
+      - name: Check commit-based repositories
         run: |
-          declare -A repos=( ["KaashDev/TVapp"]="TVapp" )
           last_seen=$(cat cache/last_seen.json)
           updated=${UPDATED:-false}
-          for repo in "${!repos[@]}"; do
+          while read -r repo filename; do
+            [ -z "$repo" ] && continue
             api="https://api.github.com/repos/$repo/commits?per_page=1"
             latest_sha=$(curl -s $api | jq -r '.[0].sha // empty')
             [ -z "$latest_sha" ] && continue
             prev_sha=$(echo "$last_seen" | jq -r --arg r "$repo" '.[$r].sha // empty')
             if [ "$latest_sha" != "$prev_sha" ]; then
               echo "🔧 New commit for $repo"
-              wget -q -O wgt_files/$(echo $repo | sed 's|/|-|g').wgt "https://github.com/$repo/raw/main/${repos[$repo]}.wgt"
+              wget -q -O wgt_files/$(echo $repo | sed 's|/|-|g').wgt "https://github.com/$repo/raw/main/$filename.wgt"
               last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg s "$latest_sha" '.[$r].sha=$s')
               updated=true
             fi
-          done
+          done <<< "$(jq -r '.commits | to_entries[] | "\(.key) \(.value)"' repos-sync.json)"
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
-      # --- Commit cache and release ---
       - name: Commit cache
         if: env.UPDATED == 'true'
         run: |
@@ -182,13 +192,11 @@ jobs:
 
   tizen-build:
     runs-on: ubuntu-latest
-    needs: prepare
+    needs: [prepare, generate-matrix-build]
     strategy:
-      matrix:
-        repo: ["thonythony/fireplace", "dmaidaniuk/vlc-tizen", "fgl27/smarttv-twitch"]
+      matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Download Tizen Studio and signing script
         uses: actions/download-artifact@v4
@@ -196,24 +204,24 @@ jobs:
           name: tizen-tools
           path: .
 
-      - name: Setup build directories
+      - name: Clone and build project
         run: |
           mkdir -p wgt_files build
           cd build
-          # Shallow single-branch clone with retries
+          repo="${{ matrix.repo }}"
+          branch="${{ matrix.branch }}"
+          repo_dir=$(basename $repo)
+          echo "Building $repo (branch: $branch)"
+
           n=0
           until [ $n -ge 3 ]; do
-            git clone --depth 1 --single-branch --branch main "https://github.com/${{ matrix.repo }}.git" && break
+            git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git" && break
             n=$((n+1))
             echo "Retrying clone... ($n)"
             sleep 5
           done
 
-      - name: Install and build
-        working-directory: build
-        run: |
-          repo_dir=$(basename ${{ matrix.repo }})
-          cd $repo_dir
+          cd "$repo_dir" || { echo "❌ Failed to enter cloned repo directory"; exit 1; }
 
           if [ -f package.json ]; then
             npm install --no-audit
@@ -225,5 +233,5 @@ jobs:
           "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
           "$PACKAGE_EXP" .
 
-          filename=$(echo "${{ matrix.repo }}" | sed 's|/|-|g').wgt
+          filename=$(echo "$repo" | sed 's|/|-|g').wgt
           mv *.wgt ../../wgt_files/$filename
