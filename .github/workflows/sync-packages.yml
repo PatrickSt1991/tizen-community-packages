@@ -59,7 +59,7 @@ jobs:
       - name: Create expect script for signing
         id: package_exp
         run: |
-          cat > "${GITHUB_WORKSPACE}/package.exp" <<'EXPEOF'
+          cat > ${GITHUB_WORKSPACE}/package.exp <<'EXPEOF'
 #!/usr/bin/expect -f
 set timeout 300
 set build_dir [lindex $argv 0]
@@ -72,12 +72,12 @@ expect {
   eof
 }
 EXPEOF
-          chmod +x "${GITHUB_WORKSPACE}/package.exp"
-          echo "path=${GITHUB_WORKSPACE}/package.exp" >> "$GITHUB_OUTPUT"
+          chmod +x ${GITHUB_WORKSPACE}/package.exp
+          echo "path=${GITHUB_WORKSPACE}/package.exp" >> $GITHUB_OUTPUT
 
       - name: Set Tizen path output
         id: set_tizen_path
-        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> "$GITHUB_OUTPUT"
+        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
 
   generate-matrix-build:
     runs-on: ubuntu-latest
@@ -94,7 +94,7 @@ EXPEOF
             build_args: (.value.build_args // ""),
             skip_npm: (.value.skip_npm // false)
           }]}' repos-build.json)
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   sync:
     runs-on: ubuntu-latest
@@ -108,7 +108,7 @@ EXPEOF
         id: tag
         run: |
           tag="community-${GITHUB_RUN_NUMBER}-$(date +%Y%m%d-%H%M%S)"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> $GITHUB_OUTPUT
 
       - name: Download WGTs from repos-sync.json
         run: |
