@@ -2,9 +2,9 @@ name: Sync Tizen Community Packages
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # every 24 hours
+    - cron: '0 0 * * *'
   workflow_dispatch:
-    inputs: {} 
+    inputs: {}
 
 permissions:
   contents: write
@@ -30,13 +30,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl openjdk-11-jdk
 
-      - name: Download & Install Tizen Studio CLI
+      - name: Install Tizen Studio CLI
         run: |
           mkdir -p tizen-studio
-          curl -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
-          chmod +x tizen-installer
-          ./tizen-installer --accept-license tizen-studio
-          rm tizen-installer
+          curl -L -o tizen-cli.bin "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          chmod +x tizen-cli.bin
+          yes | ./tizen-cli.bin --accept-license --no-progress tizen-studio
+          rm tizen-cli.bin
           chmod -R +x tizen-studio/tools/ide/bin
 
       - name: Create Tizen Certificate
@@ -72,9 +72,21 @@ jobs:
         id: set_tizen_path
         run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
 
-  sync:
-    runs-on: ubuntu-latest
+  process-repo:
     needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: [
+          "OneLiberty/moonlight-chrome-tizen",
+          "MrPhaze62/moonlight-chrome-tizen-no-gamemode",
+          "PatrickSt1991/Sportlink.Club.Info.Viewer",
+          "reisxd/TizenBrew",
+          "thonythony/fireplace",
+          "KaashDev/TVapp",
+          "dmaidaniuk/vlc-tizen",
+          "fgl27/smarttv-twitch"
+        ]
     env:
       TIZEN_PATH: ${{ needs.prepare.outputs.tizen_path }}
       PACKAGE_EXP: ${{ needs.prepare.outputs.signing_script }}
@@ -90,87 +102,49 @@ jobs:
       - name: Load last seen state
         run: echo "LAST_SEEN=$(cat cache/last_seen.json)" >> $GITHUB_ENV
 
-      # --- Release-based repos ---
-      - name: Check release-based repositories
+      - name: Process repo
         run: |
-          declare -A repos=(
-            ["OneLiberty/moonlight-chrome-tizen"]="release"
-            ["MrPhaze62/moonlight-chrome-tizen-no-gamemode"]="release"
-            ["PatrickSt1991/Sportlink.Club.Info.Viewer"]="release"
-            ["reisxd/TizenBrew"]="release"
-          )
-          last_seen=$(cat cache/last_seen.json)
-          updated=false
-          for repo in "${!repos[@]}"; do
-            api="https://api.github.com/repos/$repo/releases/latest"
+          owner=$(echo ${{ matrix.repo }} | cut -d/ -f1)
+          reponame=$(echo ${{ matrix.repo }} | cut -d/ -f2)
+          echo "Processing $owner/$reponame"
+
+          # Release-based
+          if [[ "${{ matrix.repo }}" == OneLiberty* || "${{ matrix.repo }}" == MrPhaze62* || "${{ matrix.repo }}" == PatrickSt1991* || "${{ matrix.repo }}" == reisxd* ]]; then
+            api="https://api.github.com/repos/${{ matrix.repo }}/releases/latest"
             latest_tag=$(curl -s $api | jq -r '.tag_name // empty')
-            [ -z "$latest_tag" ] && continue
-            prev_tag=$(echo "$last_seen" | jq -r --arg r "$repo" '.[$r].tag // empty')
-            if [ "$latest_tag" != "$prev_tag" ]; then
-              echo "🎉 New release for $repo: $latest_tag"
+            prev_tag=$(jq -r --arg r "${{ matrix.repo }}" '.[$r].tag // empty' cache/last_seen.json)
+            if [[ "$latest_tag" != "$prev_tag" && -n "$latest_tag" ]]; then
+              echo "🎉 New release: $latest_tag"
               assets=$(curl -s $api | jq -r '.assets[]?.browser_download_url // empty')
               for url in $assets; do
-                [[ "$url" == *.wgt ]] && wget -q -O "wgt_files/$(echo $repo | tr / -).wgt" "$url"
+                [[ "$url" == *.wgt ]] && wget -q -O "wgt_files/${owner}-${reponame}.wgt" "$url"
               done
-              last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg t "$latest_tag" '.[$r].tag=$t')
-              updated=true
+              jq --arg r "${{ matrix.repo }}" --arg t "$latest_tag" '.[$r].tag=$t' cache/last_seen.json > tmp.json && mv tmp.json cache/last_seen.json
             fi
-          done
-          echo "$last_seen" > cache/last_seen.json
-          echo "UPDATED=$updated" >> $GITHUB_ENV
-
-      # --- Commit-based repos ---
-      - name: Build commit-based repositories
-        run: |
-          declare -A repos=(
-            ["thonythony/fireplace"]="fireplace"
-            ["KaashDev/TVapp"]="TVapp"
-            ["dmaidaniuk/vlc-tizen"]="vlc-tizen"
-            ["fgl27/smarttv-twitch"]="smarttv-twitch"
-          )
-          last_seen=$(cat cache/last_seen.json)
-          updated=${UPDATED:-false}
-          for repo in "${!repos[@]}"; do
-            api="https://api.github.com/repos/$repo/commits?per_page=1"
+          else
+            # Commit-based
+            api="https://api.github.com/repos/${{ matrix.repo }}/commits?per_page=1"
             latest_sha=$(curl -s $api | jq -r '.[0].sha // empty')
-            [ -z "$latest_sha" ] && continue
-            prev_sha=$(echo "$last_seen" | jq -r --arg r "$repo" '.[$r].sha // empty')
-            if [ "$latest_sha" != "$prev_sha" ]; then
-              echo "🔧 New commit for $repo"
-              git clone --depth 1 "https://github.com/$repo.git"
-              cd "$(basename $repo)"
-
-              # --- Node modules cache ---
-              echo "Caching node_modules for $repo..."
-              mkdir -p ../cache
-              node_cache_key="${repo//\//-}-node-modules-${latest_sha}"
-              if [ -d node_modules ]; then
-                echo "node_modules exists, skipping install"
-              else
-                npm install --no-audit --legacy-peer-deps || true
-              fi
-
-              # --- Build & Package ---
+            prev_sha=$(jq -r --arg r "${{ matrix.repo }}" '.[$r].sha // empty' cache/last_seen.json)
+            if [[ "$latest_sha" != "$prev_sha" && -n "$latest_sha" ]]; then
+              echo "🔧 New commit: $latest_sha"
+              git clone --depth 1 "https://github.com/${{ matrix.repo }}.git"
+              cd "$reponame"
               if [ -f package.json ]; then
+                npm install --no-audit
                 npm run build || npm run package || true
               fi
               $TIZEN_PATH/tools/ide/bin/tizen build-web || true
               $PACKAGE_EXP .
               mkdir -p ../wgt_files
-              wgt_name="../wgt_files/$(echo $repo | tr / -).wgt"
-              find . -type f -name '*.wgt' -exec cp {} "$wgt_name" \;
-
+              find . -type f -name '*.wgt' -exec cp {} "../wgt_files/${owner}-${reponame}.wgt" \;
               cd ..
-              last_seen=$(echo "$last_seen" | jq --arg r "$repo" --arg s "$latest_sha" '.[$r].sha=$s')
-              updated=true
+              jq --arg r "${{ matrix.repo }}" --arg s "$latest_sha" '.[$r].sha=$s' cache/last_seen.json > tmp.json && mv tmp.json cache/last_seen.json
             fi
-          done
-          echo "$last_seen" > cache/last_seen.json
-          echo "UPDATED=$updated" >> $GITHUB_ENV
+          fi
 
-      # --- Commit cache & release ---
-      - name: Commit cache
-        if: env.UPDATED == 'true'
+      - name: Commit updated cache
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -178,17 +152,12 @@ jobs:
           git commit -m "Update last-seen cache [skip ci]" || true
           git push
 
-      - name: Generate release tag
-        if: env.UPDATED == 'true'
-        id: release_tag
-        run: |
-          echo "TAG=community-${{ github.run_number }}-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
-          echo "NAME=Community Package $(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        if: env.UPDATED == 'true'
+      - name: Create release (per repo)
+        if: always()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_tag.outputs.TAG }}
-          name: ${{ steps.release_tag.outputs.NAME }}
-          files: "wgt_files/*"
+          tag_name: community-${{ github.run_number }}-${{ matrix.repo }}
+          name: Community Package - ${{ matrix.repo }}
+          files: "wgt_files/${owner}-${reponame}.wgt"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
