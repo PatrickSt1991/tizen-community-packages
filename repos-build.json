@@ -1,5 +1,13 @@
 {
-  "thonythony/fireplace": "master",
-  "dmaidaniuk/vlc-tizen": "master",
-  "fgl27/smarttv-twitch": "master"
+  "thonythony/fireplace": {
+    "branch": "master",
+    "skip_npm": true
+  },
+  "dmaidaniuk/vlc-tizen": {
+    "branch": "master",
+    "build_script": "buildall.sh"
+  },
+  "fgl27/smarttv-twitch": {
+    "branch": "master"
+  }
 }
