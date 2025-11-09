@@ -4,10 +4,11 @@
     "skip_npm": true
   },
   "dmaidaniuk/vlc-tizen": {
-    "branch": "master",
-    "build_script": "buildall.sh"
+    "branch": "main",
+    "build_script": "buildall.sh",
+    "build_args": "-a armv7l"
   },
   "fgl27/smarttv-twitch": {
-    "branch": "master"
+    "branch": "main"
   }
 }
