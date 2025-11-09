@@ -202,6 +202,21 @@ jobs:
           fi
           echo "GCC verified under /tmp"
 
+          # --- Tizen SDK environment for TV build ---
+          export TIZEN_VER=5.5
+          export TIZEN_PLATFORM=tv
+          export TIZEN_ARCH=armv7l
+          export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
+          export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+          export CC=arm-linux-gnueabi-gcc
+          export CXX=arm-linux-gnueabi-g++
+          echo "Using Tizen rootstrap at: $TIZEN_ROOTSTRAP"
+          if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
+            echo "❌ Tizen rootstrap not found, showing available platforms..."
+            find "$TIZEN_PATH/platforms" -maxdepth 3 -type d
+            exit 1
+          fi
+
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
             echo "Running $build_script $build_args..."
