@@ -86,13 +86,13 @@ jobs:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
-          matrix=$(jq -c '{include: [to_entries[] | {
+          matrix=$(jq -c "{include: [to_entries[] | {
             repo: .key,
             branch: .value.branch,
-            build_script: (.value.build_script // ""),
-            build_args: (.value.build_args // ""),
+            build_script: (.value.build_script // \"\"),
+            build_args: (.value.build_args // \"\"),
             skip_npm: (.value.skip_npm // false)
-          }]}' repos-build.json)
+          }]}" repos-build.json)
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   sync:
