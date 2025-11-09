@@ -183,14 +183,6 @@ jobs:
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
-      - name: Cache VLC toolchain bootstrap
-        uses: actions/cache@v4
-        with:
-          path: build/vlc-tizen/vlc/extras/tools
-          key: vlc-tools-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            vlc-tools-${{ runner.os }}-
-
       - name: Clone and build project
         run: |
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
@@ -207,56 +199,48 @@ jobs:
           git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git"
           cd "$(basename "$repo")" || exit 1
 
-          # --- Environment setup for Tizen cross-compilation ---
+          # --- Prepare environment for Tizen cross-compilation ---
           export TIZEN_SDK="$TIZEN_PATH"
           export TIZEN_STUDIO="$TIZEN_PATH"
           export SYSROOT="$TIZEN_PATH/platforms/tizen-5.5/mobile/rootstraps/mobile-5.5-device.core"
           export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:/usr/bin:$PATH"
 
-          # --- Force host tools to use native GCC ---
+          # --- Fix for GitHub runner 'noexec' mount ---
+          echo "🧩 Applying workaround for noexec build directories..."
+          cat > /usr/local/bin/run_with_tmpdir <<'EOF'
+#!/bin/bash
+export TMPDIR=/tmp
+export TEMPDIR=/tmp
+export CONFIG_SHELL=/bin/bash
+mkdir -p /tmp/autotmp && cd /tmp/autotmp
+exec "$@"
+EOF
+          chmod +x /usr/local/bin/run_with_tmpdir
+
+          # Force autoconf to believe this is a native x86_64 build
           export CC=/usr/bin/gcc
           export CXX=/usr/bin/g++
-          export LD=/usr/bin/ld
-          export AR=/usr/bin/ar
-          export NM=/usr/bin/nm
-          export STRIP=/usr/bin/strip
-          export OBJCOPY=/usr/bin/objcopy
-          export OBJDUMP=/usr/bin/objdump
-
-          # Patch buildvlc.sh for diagnostics + native compiler
-          sed -i '1i set -x' buildvlc.sh || true
-          sed -i '1i export CC=/usr/bin/gcc; export CXX=/usr/bin/g++; export LD=/usr/bin/ld;' buildvlc.sh || true
-          sed -i 's/make -j4/make -j1 V=1/' buildvlc.sh || true
-
-          # --- Sanity check native compiler before running VLC build ---
-          echo "🧪 Testing native GCC toolchain..."
-          sudo apt-get install -y build-essential libc6-dev
-          unset LDFLAGS CFLAGS CPPFLAGS LD_LIBRARY_PATH PKG_CONFIG_PATH
-          echo 'int main(){return 0;}' > test.c
-          gcc test.c -o test.out
-          if [ ! -x ./test.out ]; then
-            echo "❌ Native GCC sanity check failed!"
-            exit 1
-          fi
-          echo "✅ Native GCC working properly"
-
-          # --- Fix: ensure configure tests can run properly ---
-          echo "🩹 Forcing writable temp directories for configure checks..."
+          export CONFIG_SHELL=/bin/bash
           export TMPDIR=/tmp
           export TEMPDIR=/tmp
-          export CONFIG_SHELL=/bin/bash
-          chmod +x /tmp || true
-
-          # --- Help autoconf assume working host system ---
           export ac_cv_func_gethostbyname=yes
           export ac_cv_func_connect=yes
           export ac_cv_func_getaddrinfo=yes
           export ac_cv_c_bigendian=no
 
+          # Sanity check that gcc can compile & run from /tmp
+          echo 'int main(){return 0;}' > /tmp/test.c
+          gcc /tmp/test.c -o /tmp/test.out
+          if [ ! -x /tmp/test.out ]; then
+            echo "❌ GCC sanity check under /tmp failed!"
+            exit 1
+          fi
+          echo "✅ GCC verified under /tmp"
+
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
-            echo "🚀 Starting $build_script $build_args ..."
-            "./$build_script" $build_args || (
+            echo "🚀 Starting $build_script $build_args with noexec-safe wrapper..."
+            run_with_tmpdir "./$build_script" $build_args || (
               echo "❌ buildvlc.sh failed, dumping config.log for debugging..." ;
               find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \; ;
               exit 1
