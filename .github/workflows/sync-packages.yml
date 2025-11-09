@@ -2,7 +2,7 @@ name: Sync Tizen Community Packages
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # every 24 hours
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs: {}
 
@@ -30,7 +30,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl
 
-      - name: Download Tizen Studio Installer
+      - name: Download and Install Tizen Studio
         run: |
           curl -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
           chmod +x tizen-installer
@@ -140,13 +140,13 @@ jobs:
               cd "$(basename $repo)"
               case "$repo" in
                 "fgl27/smarttv-twitch"|"dmaidaniuk/vlc-tizen")
-                  [ -f package.json ] && (npm install --no-audit)
+                  [ -f package.json ] && npm install --no-audit
                   $TIZEN_PATH/tools/ide/bin/tizen build-web || true
                   $PACKAGE_EXP .
                   ;;
                 "thonythony/fireplace")
                   [ -f package.json ] && npm install --no-audit
-                  npx webpack --mode production
+                  npx webpack --mode production --no-watch
                   $TIZEN_PATH/tools/ide/bin/tizen build-web || true
                   $PACKAGE_EXP .
                   ;;
@@ -168,7 +168,6 @@ jobs:
           echo "$last_seen" > cache/last_seen.json
           echo "UPDATED=$updated" >> $GITHUB_ENV
 
-      # --- Commit cache and release ---
       - name: Commit cache
         if: env.UPDATED == 'true'
         run: |
