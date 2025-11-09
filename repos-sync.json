@@ -1,0 +1,11 @@
+{
+  "releases": {
+    "OneLiberty/moonlight-chrome-tizen": "release",
+    "MrPhaze62/moonlight-chrome-tizen-no-gamemode": "release",
+    "PatrickSt1991/Sportlink.Club.Info.Viewer": "release",
+    "reisxd/TizenBrew": "release"
+  },
+  "commits": {
+    "KaashDev/TVapp": "TVapp"
+  }
+}
