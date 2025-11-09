@@ -19,9 +19,6 @@ env:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    outputs:
-      tizen_path: ${{ steps.set_tizen_path.outputs.path }}
-      signing_script: ${{ steps.package_exp.outputs.path }}
     steps:
       - uses: actions/checkout@v4
 
@@ -79,6 +76,15 @@ EXPEOF
       - name: Set Tizen path output
         id: set_tizen_path
         run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> $GITHUB_OUTPUT
+
+      - name: Upload Tizen Studio and scripts as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tizen-build-env
+          path: |
+            ${{ env.TIZEN_PATH }}
+            ${{ env.PACKAGE_EXP }}
+          retention-days: 1
 
   generate-matrix-build:
     runs-on: ubuntu-latest
@@ -145,6 +151,17 @@ EXPEOF
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
     steps:
+      - name: Download Tizen Studio and scripts
+        uses: actions/download-artifact@v4
+        with:
+          name: tizen-build-env
+          path: ${{ github.workspace }} # Extracts files to the root of the workspace
+
+      - name: Make downloaded files executable
+        run: |
+          chmod +x ${{ env.PACKAGE_EXP }}
+          chmod -R +x ${{ env.TIZEN_PATH }}/tools/ide/bin
+
       - uses: actions/checkout@v4
 
       - name: Install VLC build prerequisites
@@ -215,8 +232,8 @@ EOF
             )
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
-            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-            "$PACKAGE_EXP" . || true
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web
+            "$PACKAGE_EXP" .
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           fi
 
