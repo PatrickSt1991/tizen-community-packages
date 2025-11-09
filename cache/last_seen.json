@@ -1,0 +1,26 @@
+{
+  "PatrickSt1991/Sportlink.Club.Info.Viewer": {
+    "tag": "v0.0.5"
+  },
+  "OneLiberty/moonlight-chrome-tizen": {
+    "tag": "samsung_wasm-18529148757"
+  },
+  "reisxd/TizenBrew": {
+    "tag": "v2.0.2"
+  },
+  "MrPhaze62/moonlight-chrome-tizen-no-gamemode": {
+    "tag": "samsung_wasm-18804862486"
+  },
+  "thonythony/fireplace": {
+    "sha": "a4a04a16cb610e4ccaafd06ff64783429abdd94a"
+  },
+  "KaashDev/TVapp": {
+    "sha": "fbfbb3ae3a590802f9605a61cfd6fc5b7d5b3e5c"
+  },
+  "fgl27/smarttv-twitch": {
+    "sha": "26967152190baa586e003f7f3ad3345b7ae9ff45"
+  },
+  "dmaidaniuk/vlc-tizen": {
+    "sha": "4dc2c65af66b7d145c254a5174a601b89c3b83e6"
+  }
+}
