@@ -3,7 +3,7 @@
     "branch": "master",
     "skip_npm": true
   },
-  "dmaidaniuk/vlc-tizen": {
+  "TizenTeam/vlc-tizen": {
     "branch": "master",
     "build_script": "buildall.sh",
     "build_args": "-a armv7l"
