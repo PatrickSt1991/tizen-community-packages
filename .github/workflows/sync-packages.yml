@@ -223,8 +223,11 @@ jobs:
           export OBJCOPY=/usr/bin/objcopy
           export OBJDUMP=/usr/bin/objdump
 
-          # Patch buildvlc.sh to force native compiler
+          # Patch buildvlc.sh to force native compiler + add verbose output
+          echo "🔧 Patching buildvlc.sh for diagnostics..."
+          sed -i '1i set -x' buildvlc.sh || true
           sed -i '1i export CC=/usr/bin/gcc; export CXX=/usr/bin/g++; export LD=/usr/bin/ld;' buildvlc.sh || true
+          sed -i 's/make -j4/make -j1 V=1/' buildvlc.sh || true
 
           # --- Sanity check native compiler before running VLC build ---
           echo "🧪 Testing native GCC toolchain..."
@@ -240,7 +243,12 @@ jobs:
 
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
-            "./$build_script" $build_args || exit 1
+            echo "🚀 Starting $build_script $build_args ..."
+            "./$build_script" $build_args || (
+              echo "❌ buildvlc.sh failed, dumping config.log for debugging..." ;
+              find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \; ;
+              exit 1
+            )
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
