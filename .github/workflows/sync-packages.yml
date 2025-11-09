@@ -39,22 +39,24 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install Native SDK components (for VLC + TV)
+      - name: Install Native SDK components (TV rootstrap)
         run: |
-          echo "Installing Tizen Native SDK toolchains and TV platform..."
-          $GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin install \
+          echo "📦 Installing Tizen SDK components for TV..."
+          mkdir -p "$GITHUB_WORKSPACE/tizen-studio/platforms"
+          $GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin install --accept-license \
             NativeCLI \
             NativeToolchain-GCC-armv7hl \
             NativeToolchain-GCC-x86 \
             NativeToolchain-GCC-x86_64 \
             NativeToolchain-GCC-aarch64 \
             NativeToolchain-GCC-armel \
-            TV-5.5-NativeAppDevelopment \
-            TV-Extension-5.5-NativeAppDevelopment \
+            Tizen-5.5-TV \
             TV-Extension-5.5 \
-            WEARABLE-5.5-NativeAppDevelopment
-          echo "✅ Installed Native + TV toolchains"
-          ls -R $GITHUB_WORKSPACE/tizen-studio/platforms || true
+            TV-Extension-5.5-NativeAppDevelopment \
+            TV-5.5-NativeAppDevelopment
+
+          echo "✅ Installed TV SDK. Checking for rootstrap..."
+          find $GITHUB_WORKSPACE/tizen-studio/platforms -maxdepth 5 -type d || true
 
       - name: Create Tizen Certificate
         run: |
