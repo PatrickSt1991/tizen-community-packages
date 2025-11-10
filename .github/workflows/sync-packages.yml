@@ -40,7 +40,7 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install base SDK components (Web/Native CLI)
+      - name: Install base SDK components
         run: |
           CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
           chmod +x "$CLI"
@@ -161,10 +161,12 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/tv-ext"
           cd "$GITHUB_WORKSPACE/tv-ext"
-          curl -L -o tv-ext.bin "https://developer.samsung.com/smarttv/file/8574c902-7540-412a-b8f0-ac2636006ac7"
-          chmod +x tv-ext.bin
-          ./tv-ext.bin --accept-license "$GITHUB_WORKSPACE/tizen-studio"
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 3 -type d || true
+          echo "📦 Downloading Samsung TV Extension 6.5.3..."
+          curl -L -o tv-ext.zip "https://developer.samsung.com/smarttv/file/8574c902-7540-412a-b8f0-ac2636006ac7"
+          echo "📦 Extracting TV Extension..."
+          unzip -q tv-ext.zip -d "$GITHUB_WORKSPACE/tizen-studio"
+          echo "✅ Installed TV Extension contents:"
+          find "$GITHUB_WORKSPACE/tizen-studio" -maxdepth 3 -type d | grep -E 'tv|tizen' || true
 
       - name: Clone and build project
         shell: bash
