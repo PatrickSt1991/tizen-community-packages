@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  TIZEN_STUDIO_VER: 5.5
+  TIZEN_STUDIO_VER: 4.0
   CERT_NAME: CommunityPack
   CERT_PASSWORD: 1234
   NODE_OPTIONS: --openssl-legacy-provider
@@ -31,34 +31,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl unzip
 
-      - name: Download and Install Tizen Studio 5.5
+      - name: Download and Install Tizen Studio 4.0
         run: |
           mkdir -p tizen-studio
-          curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          echo "📦 Downloading Tizen Studio 4.0 installer..."
+          curl -L -o tizen-installer \
+            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install base SDK components
+      - name: Verify installed platforms and rootstraps
         run: |
-          CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
-          chmod +x "$CLI"
-          "$CLI" install --accept-license WebCLI NativeCLI
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 2 -type d || true
-
-      - name: Install Tizen 5.5 Mobile Platform (rootstrap)
-        run: |
-          CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
-          echo "📦 Installing Tizen 5.5 Mobile WebAppDevelopment platform..."
-          "$CLI" install --accept-license MOBILE-5.5-WebAppDevelopment-CLI MOBILE-5.5-WebAppDevelopment
           echo "📁 Listing installed platforms:"
           find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 4 -type d || true
-          ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-5.5/mobile/rootstraps/mobile-5.5-device.core"
+          ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           if [ -d "$ROOTSTRAP" ]; then
-            echo "✅ Found 5.5 mobile rootstrap: $ROOTSTRAP"
+            echo "✅ Found mobile rootstrap: $ROOTSTRAP"
           else
-            echo "❌ Missing 5.5 mobile rootstrap at: $ROOTSTRAP"
+            echo "❌ Mobile rootstrap missing!"
             exit 1
           fi
 
@@ -171,16 +163,6 @@ jobs:
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
-      - name: List installed Tizen rootstraps
-        run: |
-          set -e
-          echo "Scanning ${TIZEN_PATH}/platforms for rootstraps..."
-          if [ -d "${TIZEN_PATH}/platforms" ]; then
-            find "${TIZEN_PATH}/platforms" -maxdepth 4 -type d
-          else
-            echo "No platforms directory found at ${TIZEN_PATH}/platforms"
-          fi
-
       - name: Clone and build project
         shell: bash
         run: |
@@ -217,33 +199,22 @@ jobs:
 
           # --- Tizen environment configuration for VLC ---
           if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
-            echo "⚙️ Configuring Tizen 5.5 environment for TV build..."
-            export TIZEN_VER=5.5
-            export TIZEN_PLATFORM=tv
+            echo "⚙️ Configuring Tizen 4.0 environment for TV build..."
+            export TIZEN_VER=4.0
+            export TIZEN_PLATFORM=mobile
             export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-
-            # Primary: TV rootstrap (if present)
-            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
-
-            # Fallback: use mobile rootstrap as sysroot substitute
-            if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
-              echo "⚠️ TV rootstrap not found, falling back to mobile rootstrap..."
-              export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/mobile/rootstraps/mobile-${TIZEN_VER}-device.core"
-            fi
-
+            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/mobile-${TIZEN_VER}-device.core"
             if [ -d "$TIZEN_ROOTSTRAP" ]; then
               echo "✅ Using rootstrap: $TIZEN_ROOTSTRAP"
             else
-              echo "❌ No valid rootstrap found in Tizen Studio installation!"
+              echo "❌ Rootstrap not found: $TIZEN_ROOTSTRAP"
               find "$TIZEN_PATH/platforms" -maxdepth 3 -type d || true
               exit 1
             fi
-
             export CC=arm-linux-gnueabi-gcc
             export CXX=arm-linux-gnueabi-g++
           fi
 
-          # --- Build ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
             echo "🚧 Running $build_script $build_args..."
