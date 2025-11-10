@@ -196,7 +196,7 @@ jobs:
             build-essential autoconf automake autopoint bison flex \
             gettext pkg-config help2man nasm yasm cmake ninja-build \
             python3 python3-pip python3-setuptools python3-wheel \
-            libtool libprotobuf-dev protobuf-compiler \
+            libtool libprotobuf-dev protobuf-compiler ragel meson \
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
