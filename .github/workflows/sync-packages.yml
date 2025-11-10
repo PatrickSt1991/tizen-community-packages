@@ -40,12 +40,16 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install base SDK components
+      - name: Install base SDK components (with platform)
         run: |
           CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
           chmod +x "$CLI"
-          "$CLI" install --accept-license WebCLI NativeCLI
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 2 -type d || true
+
+          echo "📦 Installing Tizen CLI + Platform components..."
+          "$CLI" install --accept-license WebCLI NativeCLI MOBILE-5.5-NativeAppDevelopment
+
+          echo "📁 Installed platforms and rootstraps:"
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 3 -type d || true
 
       - name: Create Tizen Certificate
         run: |
@@ -156,6 +160,15 @@ jobs:
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
+      - name: 🧩 Debug: List installed Tizen rootstraps
+        run: |
+          echo "🔍 Checking available Tizen rootstrap directories:"
+          if [ -d "$TIZEN_PATH/platforms" ]; then
+            find "$TIZEN_PATH/platforms" -maxdepth 3 -type d | grep rootstrap || echo "⚠️ No rootstraps found!"
+          else
+            echo "❌ No platforms directory found at $TIZEN_PATH/platforms"
+          fi
+
       - name: Clone and build project
         shell: bash
         run: |
@@ -190,17 +203,13 @@ jobs:
           [ -x /tmp/test.out ] || (echo "❌ GCC sanity check failed" && exit 1)
           echo "✅ GCC verified under /tmp"
 
-          # --- Tizen environment configuration for VLC ---
           if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
             echo "⚙️ Configuring Tizen 5.5 environment for TV build..."
             export TIZEN_VER=5.5
             export TIZEN_PLATFORM=tv
             export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-
-            # Primary: TV rootstrap (if present)
             export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
 
-            # Fallback: use mobile rootstrap as sysroot substitute
             if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
               echo "⚠️ TV rootstrap not found, falling back to mobile rootstrap..."
               export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/mobile/rootstraps/mobile-${TIZEN_VER}-device.core"
@@ -218,7 +227,6 @@ jobs:
             export CXX=arm-linux-gnueabi-g++
           fi
 
-          # --- Build ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
             echo "🚧 Running $build_script $build_args..."
