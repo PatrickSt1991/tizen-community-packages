@@ -34,18 +34,37 @@ jobs:
       - name: Download and Install Tizen Studio 5.5
         run: |
           mkdir -p tizen-studio
-          curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
-          chmod +x tizen-installer
-          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
-          rm ./tizen-installer
+          curl -L -o tizen-installer.bin \
+            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_5.5_ubuntu-64.bin"
+          chmod +x tizen-installer.bin
+          ./tizen-installer.bin --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
+          rm tizen-installer.bin
           chmod -R +x tizen-studio/tools/ide/bin
+          echo "✅ Installed Tizen Studio 5.5 from GitHub release"
 
-      - name: Install base SDK components
+      - name: Install SDK components and Samsung TV Extension 5.5
         run: |
           CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
           chmod +x "$CLI"
           "$CLI" install --accept-license WebCLI NativeCLI
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 2 -type d || true
+          echo "📦 Installing Samsung TV Extension 5.5.0..."
+          mkdir -p "$GITHUB_WORKSPACE/tv-ext"
+          cd "$GITHUB_WORKSPACE/tv-ext"
+          curl -L -o tv-ext.zip \
+            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/tv-samsung-public-web-add-ons_5.5.0_ubuntu-64.zip"
+          unzip -qo tv-ext.zip -d "$GITHUB_WORKSPACE/tizen-studio"
+          rm tv-ext.zip
+          echo "✅ Installed Samsung TV Extension 5.5.0"
+
+          echo "📦 Installing Web Simulator Core 5.5.1..."
+          curl -L -o websim.zip \
+            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/tv-samsung-websimulator-core_5.5.1_ubuntu-64.zip"
+          unzip -qo websim.zip -d "$GITHUB_WORKSPACE/tizen-studio"
+          rm websim.zip
+          echo "✅ Installed Web Simulator Core 5.5.1"
+
+          echo "✅ Listing available platforms:"
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 3 -type d || true
 
       - name: Create Tizen Certificate
         run: |
@@ -156,18 +175,6 @@ jobs:
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
-      - name: Install Samsung TV Extension 6.5.3 (only for vlc-tizen)
-        if: ${{ contains(matrix.repo, 'vlc-tizen') }}
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/tv-ext"
-          cd "$GITHUB_WORKSPACE/tv-ext"
-          echo "📦 Downloading Samsung TV Extension 6.5.3..."
-          curl -L -o tv-ext.zip "https://developer.samsung.com/smarttv/file/8574c902-7540-412a-b8f0-ac2636006ac7"
-          echo "📦 Extracting TV Extension..."
-          unzip -q tv-ext.zip -d "$GITHUB_WORKSPACE/tizen-studio"
-          echo "✅ Installed TV Extension contents:"
-          find "$GITHUB_WORKSPACE/tizen-studio" -maxdepth 3 -type d | grep -E 'tv|tizen' || true
-
       - name: Clone and build project
         shell: bash
         run: |
@@ -202,14 +209,15 @@ jobs:
           [ -x /tmp/test.out ] || exit 1
 
           if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
-            export TIZEN_VER=6.5
+            export TIZEN_VER=5.5
             export TIZEN_PLATFORM=tv
             export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
             export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
             export CC=arm-linux-gnueabi-gcc
             export CXX=arm-linux-gnueabi-g++
+            echo "📦 Using Tizen rootstrap: $TIZEN_ROOTSTRAP"
             if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
-              echo "Missing TV rootstrap: $TIZEN_ROOTSTRAP"
+              echo "❌ Missing TV rootstrap: $TIZEN_ROOTSTRAP"
               exit 1
             fi
           fi
