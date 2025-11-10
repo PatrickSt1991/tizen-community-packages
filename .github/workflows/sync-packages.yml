@@ -34,25 +34,40 @@ jobs:
       - name: Download and Install Tizen Studio 4.0
         run: |
           mkdir -p tizen-studio
-          echo "📦 Downloading Tizen Studio 4.0 installer..."
-          curl -L -o tizen-installer \
-            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
+          curl -L -o tizen-installer "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Verify installed platforms and rootstraps
+      - name: Install base SDK components
         run: |
-          echo "📁 Listing installed platforms:"
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 4 -type d || true
+          CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
+          chmod +x "$CLI"
+          "$CLI" install --accept-license WebCLI NativeCLI
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 2 -type d || true
+
+      - name: Prepare Tizen SDK rootstrap (from your repo)
+        run: |
           ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           if [ -d "$ROOTSTRAP" ]; then
-            echo "✅ Found mobile rootstrap: $ROOTSTRAP"
+            echo "✅ Found existing rootstrap: $ROOTSTRAP"
           else
-            echo "❌ Mobile rootstrap missing!"
-            exit 1
+            echo "📦 Cloning rootstrap from PatrickSt1991/tizen-rootstrap..."
+            mkdir -p "$(dirname "$ROOTSTRAP")"
+            git clone --depth 1 https://github.com/PatrickSt1991/tizen-rootstrap.git "$GITHUB_WORKSPACE/rootstrap"
+            cp -r "$GITHUB_WORKSPACE/rootstrap/tizen-sdk/platforms/tizen2.1/rootstraps/tizen-emulator-2.1.native" "$ROOTSTRAP"
+            echo "✅ Copied fallback rootstrap to: $ROOTSTRAP"
           fi
+
+          if [ -d "$ROOTSTRAP/lib/osp" ] && [ ! -d "$ROOTSTRAP/usr/lib" ]; then
+            mkdir -p "$ROOTSTRAP/usr"
+            ln -s "$ROOTSTRAP/lib/osp" "$ROOTSTRAP/usr/lib"
+            echo "🔗 Linked lib/osp → usr/lib for compatibility"
+          fi
+
+          echo "📁 Rootstrap structure preview:"
+          find "$ROOTSTRAP" -maxdepth 3 -type d || true
 
       - name: Create Tizen Certificate
         run: |
@@ -197,24 +212,20 @@ jobs:
           [ -x /tmp/test.out ] || (echo "❌ GCC sanity check failed" && exit 1)
           echo "✅ GCC verified under /tmp"
 
-          # --- Tizen environment configuration for VLC ---
-          if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
-            echo "⚙️ Configuring Tizen 4.0 environment for TV build..."
-            export TIZEN_VER=4.0
-            export TIZEN_PLATFORM=mobile
-            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/mobile-${TIZEN_VER}-device.core"
-            if [ -d "$TIZEN_ROOTSTRAP" ]; then
-              echo "✅ Using rootstrap: $TIZEN_ROOTSTRAP"
-            else
-              echo "❌ Rootstrap not found: $TIZEN_ROOTSTRAP"
-              find "$TIZEN_PATH/platforms" -maxdepth 3 -type d || true
-              exit 1
-            fi
-            export CC=arm-linux-gnueabi-gcc
-            export CXX=arm-linux-gnueabi-g++
+          echo "⚙️ Using Tizen 4.0 environment (rootstrap from your repo)..."
+          export TIZEN_VER=4.0
+          export TIZEN_PLATFORM=mobile
+          export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/mobile-${TIZEN_VER}-device.core"
+          export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+
+          if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
+            echo "❌ Rootstrap missing at $TIZEN_ROOTSTRAP"
+            exit 1
+          else
+            echo "✅ Using rootstrap: $TIZEN_ROOTSTRAP"
           fi
 
+          # --- Build ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
             echo "🚧 Running $build_script $build_args..."
