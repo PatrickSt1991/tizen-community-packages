@@ -50,20 +50,30 @@ jobs:
       - name: Prepare Tizen SDK rootstrap (from your repo)
         run: |
           ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+
           if [ -d "$ROOTSTRAP" ]; then
             echo "✅ Found existing rootstrap: $ROOTSTRAP"
           else
             echo "📦 Cloning rootstrap from PatrickSt1991/tizen-rootstrap..."
             mkdir -p "$(dirname "$ROOTSTRAP")"
             git clone --depth 1 https://github.com/PatrickSt1991/tizen-rootstrap.git "$GITHUB_WORKSPACE/rootstrap"
-            cp -r "$GITHUB_WORKSPACE/rootstrap/tizen-sdk/platforms/tizen2.1/rootstraps/tizen-emulator-2.1.native" "$ROOTSTRAP"
-            echo "✅ Copied fallback rootstrap to: $ROOTSTRAP"
+
+            SRC_PATH="$GITHUB_WORKSPACE/rootstrap/tizen-sdk/platforms/tizen2.1/rootstraps/tizen-emulator-2.1.native"
+            if [ -d "$SRC_PATH" ]; then
+              echo "📂 Found rootstrap source at: $SRC_PATH"
+              cp -r "$SRC_PATH" "$ROOTSTRAP"
+              echo "✅ Copied emulator rootstrap to: $ROOTSTRAP"
+            else
+              echo "❌ Could not locate rootstrap inside your repo. Showing structure for debug:"
+              find "$GITHUB_WORKSPACE/rootstrap" -maxdepth 5 -type d
+              exit 1
+            fi
           fi
 
-          if [ -d "$ROOTSTRAP/lib/osp" ] && [ ! -d "$ROOTSTRAP/usr/lib" ]; then
-            mkdir -p "$ROOTSTRAP/usr"
-            ln -s "$ROOTSTRAP/lib/osp" "$ROOTSTRAP/usr/lib"
-            echo "🔗 Linked lib/osp → usr/lib for compatibility"
+          # Symlink fix for expected SDK structure
+          if [ -d "$ROOTSTRAP/usr/lib/osp" ] && [ ! -d "$ROOTSTRAP/lib" ]; then
+            ln -s "$ROOTSTRAP/usr/lib" "$ROOTSTRAP/lib"
+            echo "🔗 Linked usr/lib → lib for compatibility"
           fi
 
           echo "📁 Rootstrap structure preview:"
