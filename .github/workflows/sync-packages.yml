@@ -79,6 +79,12 @@ jobs:
           echo "📁 Rootstrap structure preview:"
           find "$ROOTSTRAP" -maxdepth 3 -type d || true
 
+      - name: Upload rootstrap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tizen-rootstrap
+          path: ${{ github.workspace }}/tizen-studio/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
+
       - name: Create Tizen Certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
@@ -177,6 +183,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download rootstrap artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tizen-rootstrap
+          path: ${{ github.workspace }}/tizen-studio/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
+
       - name: Install VLC build prerequisites
         run: |
           sudo apt-get update
@@ -230,6 +242,7 @@ jobs:
 
           if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
             echo "❌ Rootstrap missing at $TIZEN_ROOTSTRAP"
+            find "$TIZEN_PATH" -maxdepth 5 -type d
             exit 1
           else
             echo "✅ Using rootstrap: $TIZEN_ROOTSTRAP"
