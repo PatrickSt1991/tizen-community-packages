@@ -47,6 +47,21 @@ jobs:
           "$CLI" install --accept-license WebCLI NativeCLI
           find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 2 -type d || true
 
+      - name: Install Tizen 5.5 Mobile Platform (rootstrap)
+        run: |
+          CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
+          echo "📦 Installing Tizen 5.5 Mobile WebAppDevelopment platform..."
+          "$CLI" install --accept-license MOBILE-5.5-WebAppDevelopment-CLI MOBILE-5.5-WebAppDevelopment
+          echo "📁 Listing installed platforms:"
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 4 -type d || true
+          ROOTSTRAP="$GITHUB_WORKSPACE/tizen-studio/platforms/tizen-5.5/mobile/rootstraps/mobile-5.5-device.core"
+          if [ -d "$ROOTSTRAP" ]; then
+            echo "✅ Found 5.5 mobile rootstrap: $ROOTSTRAP"
+          else
+            echo "❌ Missing 5.5 mobile rootstrap at: $ROOTSTRAP"
+            exit 1
+          fi
+
       - name: Create Tizen Certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
