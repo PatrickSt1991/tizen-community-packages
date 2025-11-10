@@ -34,37 +34,18 @@ jobs:
       - name: Download and Install Tizen Studio 5.5
         run: |
           mkdir -p tizen-studio
-          curl -L -o tizen-installer.bin \
-            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_5.5_ubuntu-64.bin"
-          chmod +x tizen-installer.bin
-          ./tizen-installer.bin --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
-          rm tizen-installer.bin
+          curl -L -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          chmod +x tizen-installer
+          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
+          rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
-          echo "✅ Installed Tizen Studio 5.5 from GitHub release"
 
-      - name: Install SDK components and Samsung TV Extension 5.5
+      - name: Install base SDK components
         run: |
           CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
           chmod +x "$CLI"
           "$CLI" install --accept-license WebCLI NativeCLI
-          echo "📦 Installing Samsung TV Extension 5.5.0..."
-          mkdir -p "$GITHUB_WORKSPACE/tv-ext"
-          cd "$GITHUB_WORKSPACE/tv-ext"
-          curl -L -o tv-ext.zip \
-            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/tv-samsung-public-web-add-ons_5.5.0_ubuntu-64.zip"
-          unzip -qo tv-ext.zip -d "$GITHUB_WORKSPACE/tizen-studio"
-          rm tv-ext.zip
-          echo "✅ Installed Samsung TV Extension 5.5.0"
-
-          echo "📦 Installing Web Simulator Core 5.5.1..."
-          curl -L -o websim.zip \
-            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/tv-samsung-websimulator-core_5.5.1_ubuntu-64.zip"
-          unzip -qo websim.zip -d "$GITHUB_WORKSPACE/tizen-studio"
-          rm websim.zip
-          echo "✅ Installed Web Simulator Core 5.5.1"
-
-          echo "✅ Listing available platforms:"
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 3 -type d || true
+          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 2 -type d || true
 
       - name: Create Tizen Certificate
         run: |
@@ -188,6 +169,7 @@ jobs:
           appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
           output_name="${username}-${appname}.wgt"
 
+          echo "📦 Cloning $repo ($branch)..."
           git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git"
           cd "$(basename "$repo")" || exit 1
 
@@ -203,34 +185,51 @@ jobs:
           export CONFIG_SHELL=/bin/bash
           export TMPDIR=/tmp
           export TEMPDIR=/tmp
-
           echo 'int main(){return 0;}' > /tmp/test.c
           gcc /tmp/test.c -o /tmp/test.out
-          [ -x /tmp/test.out ] || exit 1
+          [ -x /tmp/test.out ] || (echo "❌ GCC sanity check failed" && exit 1)
+          echo "✅ GCC verified under /tmp"
 
+          # --- Tizen environment configuration for VLC ---
           if [[ "$repo" == "TizenTeam/vlc-tizen" ]]; then
+            echo "⚙️ Configuring Tizen 5.5 environment for TV build..."
             export TIZEN_VER=5.5
             export TIZEN_PLATFORM=tv
-            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
             export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-            export CC=arm-linux-gnueabi-gcc
-            export CXX=arm-linux-gnueabi-g++
-            echo "📦 Using Tizen rootstrap: $TIZEN_ROOTSTRAP"
+
+            # Primary: TV rootstrap (if present)
+            export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/${TIZEN_PLATFORM}-${TIZEN_VER}-device.core"
+
+            # Fallback: use mobile rootstrap as sysroot substitute
             if [ ! -d "$TIZEN_ROOTSTRAP" ]; then
-              echo "❌ Missing TV rootstrap: $TIZEN_ROOTSTRAP"
+              echo "⚠️ TV rootstrap not found, falling back to mobile rootstrap..."
+              export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/mobile/rootstraps/mobile-${TIZEN_VER}-device.core"
+            fi
+
+            if [ -d "$TIZEN_ROOTSTRAP" ]; then
+              echo "✅ Using rootstrap: $TIZEN_ROOTSTRAP"
+            else
+              echo "❌ No valid rootstrap found in Tizen Studio installation!"
+              find "$TIZEN_PATH/platforms" -maxdepth 3 -type d || true
               exit 1
             fi
+
+            export CC=arm-linux-gnueabi-gcc
+            export CXX=arm-linux-gnueabi-g++
           fi
 
+          # --- Build ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
             chmod +x "$build_script"
+            echo "🚧 Running $build_script $build_args..."
             run_with_tmpdir "./$build_script" $build_args || (
-              echo "Build failed, dumping config.log..."
-              find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 50 {} \;
+              echo "❌ Build failed, dumping config.log..."
+              find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 50 {} \;
               exit 1
             )
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           else
+            echo "🌐 No build script found — performing standard web build..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
