@@ -106,6 +106,7 @@ jobs:
 
           echo "📁 Creating Tizen SDK compatibility symlink..."
           sudo mkdir -p /home/runner
+          sudo mkdir -p /home/runner/tizen-sdk
           sudo ln -sf "$TIZEN_PATH" /home/runner/tizen-sdk
           echo 'TIZEN_SDK_MAJOR=4' | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
           echo 'TIZEN_SDK_MINOR=0' | sudo tee -a /home/runner/tizen-sdk/sdk.version >/dev/null
