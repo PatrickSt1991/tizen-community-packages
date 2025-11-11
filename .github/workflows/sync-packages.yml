@@ -73,7 +73,12 @@ jobs:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
-          matrix=$(jq -c '{include: [to_entries[] | {repo: .key, branch: .value.branch, build_script: .value.build_script, build_args: .value.build_args}]}' repos-build.json)
+          matrix=$(jq -c '{include: [to_entries[] | {
+            repo: .key,
+            branch: .value.branch,
+            build_script: (.value.build_script // ""),
+            build_args: (.value.build_args // "")
+          }]}' repos-build.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   tizen-build:
@@ -84,7 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone and build Tizen apps
+      - name: Clone and build project
         run: |
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
@@ -92,24 +97,27 @@ jobs:
           cd "$(basename "${{ matrix.repo }}")"
 
           repo_name="$(basename "${{ matrix.repo }}")"
-          echo "✅ Repo detected: $repo_name"
+          echo "✅ Building repository: $repo_name"
 
           if [[ "$repo_name" == "vlc-tizen" ]]; then
-            echo "⚙️ Running advanced VLC-Tizen build..."
+            echo "⚙️ Running advanced VLC build setup..."
 
+            # --- Safe Tizen SDK layout ---
             sudo mkdir -p /home/runner/tizen-sdk
             sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
 
-            # ✅ Write sdk.version safely
+            # ✅ Safe sdk.version creation
             echo "TIZEN_SDK_MAJOR=4" | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
             echo "TIZEN_SDK_MINOR=0" | sudo tee -a /home/runner/tizen-sdk/sdk.version >/dev/null
 
+            # Rootstrap folder + symlink
             sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
             if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
               sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
                 /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
             fi
 
+            # Toolchain
             if [ -d "$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin" ]; then
               export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
             fi
