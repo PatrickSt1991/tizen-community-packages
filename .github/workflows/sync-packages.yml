@@ -162,6 +162,14 @@ jobs:
           echo "✅ Checking GCC setup..."
           gcc --version || exit 1
 
+          # --- Create run_with_tmpdir helper ---
+          printf '%s\n' '#!/bin/bash' \
+            'export TMPDIR=/tmp' \
+            'export TEMPDIR=/tmp' \
+            'export CONFIG_SHELL=/bin/bash' \
+            'exec "$@"' > /usr/local/bin/run_with_tmpdir
+          chmod +x /usr/local/bin/run_with_tmpdir
+
           # ---- Compat path for buildall.sh ----
           if [ ! -e /home/runner/tizen-sdk ]; then
             sudo mkdir -p /home/runner
@@ -194,7 +202,6 @@ jobs:
           pushd vlc >/dev/null
           make -C extras/tools -j2 CC=gcc CXX=g++ HOSTCC=gcc HOSTCXX=g++ CC_FOR_BUILD=gcc || true
 
-          # ✅ Skip rebuilding host tools in buildall.sh later
           echo "🧱 Marking VLC host tools as prebuilt..."
           touch extras/tools/.pkg-config extras/tools/.automake extras/tools/.autoconf \
                 extras/tools/.libtool extras/tools/.protobuf extras/tools/.meson extras/tools/.ragel
@@ -208,7 +215,6 @@ jobs:
           export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
           export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
           export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
-
           echo "✅ Using sysroot: $SYSROOT"
 
           # ---- Patch buildall.sh ----
