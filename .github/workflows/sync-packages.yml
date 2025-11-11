@@ -1,15 +1,14 @@
 name: Sync Tizen Community Packages
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
 
 permissions:
   contents: write
 
 env:
-  # We’ll install Studio 4.0 (from your release asset) for this build
   TIZEN_STUDIO_VER: 4
   CERT_NAME: CommunityPack
   CERT_PASSWORD: 1234
@@ -22,8 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tizen_path: ${{ steps.set_tizen_path.outputs.path }}
-      signing_script: ${{ steps.package_exp.outputs.path }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -32,25 +29,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl unzip build-essential
 
-      - name: Download and Install Tizen Studio 4.0 (from your release asset)
+      - name: Download and install Tizen Studio 4.0
         run: |
           mkdir -p tizen-studio
-          curl -L -o tizen-installer \
-            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
+          curl -L -o tizen-installer "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install base SDK components (CLI only)
-        run: |
-          CLI="$GITHUB_WORKSPACE/tizen-studio/package-manager/package-manager-cli.bin"
-          chmod +x "$CLI"
-          # For Studio 4.0, WebCLI + NativeCLI are valid ids
-          "$CLI" install --accept-license WebCLI NativeCLI || true
-          find "$GITHUB_WORKSPACE/tizen-studio/platforms" -maxdepth 4 -type d || true
-
-      - name: Create Tizen Certificate
+      - name: Create certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
           ./tizen-studio/tools/ide/bin/tizen certificate -a "$CERT_NAME" -p "$CERT_PASSWORD" \
@@ -60,127 +48,38 @@ jobs:
           ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
       - name: Create expect script for signing
-        id: package_exp
-        shell: bash
         run: |
-          echo '#!/usr/bin/expect -f' > "${GITHUB_WORKSPACE}/package.exp"
-          echo 'set timeout 300' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo 'set build_dir [lindex $argv 0]' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo 'spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo 'expect {' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo '  "Save author password" { send "n\r"; exp_continue }' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo '  "Save distributor1 password" { send "n\r"; exp_continue }' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo '  eof' >> "${GITHUB_WORKSPACE}/package.exp"
-          echo '}' >> "${GITHUB_WORKSPACE}/package.exp"
-          chmod +x "${GITHUB_WORKSPACE}/package.exp"
-          echo "path=${GITHUB_WORKSPACE}/package.exp" >> "$GITHUB_OUTPUT"
+          echo '#!/usr/bin/expect -f' > package.exp
+          echo 'set timeout 300' >> package.exp
+          echo 'set build_dir [lindex $argv 0]' >> package.exp
+          echo 'spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' >> package.exp
+          echo 'expect {' >> package.exp
+          echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
+          echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
+          echo '  eof' >> package.exp
+          echo '}' >> package.exp
+          chmod +x package.exp
 
-      - name: Set Tizen path output
+      - name: Set output path
         id: set_tizen_path
         run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> "$GITHUB_OUTPUT"
 
-  generate-matrix-build:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: set-matrix
-        run: |
-          matrix=$(jq -c '{include: [to_entries[] | {
-            repo: .key,
-            branch: .value.branch,
-            build_script: (.value.build_script // ""),
-            build_args: (.value.build_args // ""),
-            skip_npm: (.value.skip_npm // false)
-          }]}' repos-build.json)
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
-  sync:
-    runs-on: ubuntu-latest
-    needs: prepare
-    outputs:
-      release_tag: ${{ steps.tag.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create unified release tag
-        id: tag
-        run: |
-          tag="community-${GITHUB_RUN_NUMBER}-$(date +%Y%m%d-%H%M%S)"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      - name: Download WGTs from repos-sync.json
-        run: |
-          mkdir -p wgt_files
-          jq -c '.releases | to_entries[]' repos-sync.json | while read -r entry; do
-            repo=$(echo "$entry" | jq -r '.key')
-            api="https://api.github.com/repos/$repo/releases/latest"
-            latest_tag=$(curl -s "$api" | jq -r '.tag_name // empty')
-            [ -z "$latest_tag" ] && continue
-            assets=$(curl -s "$api" | jq -r '.assets[]?.browser_download_url // empty')
-            for url in $assets; do
-              if [[ "$url" == *.wgt ]]; then
-                username=$(echo "$repo" | cut -d'/' -f1)
-                appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
-                filename="${username}-${appname}.wgt"
-                wget -q -O "wgt_files/$filename" "$url"
-              fi
-            done
-          done
-
-      - name: Upload WGTS to unified release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: "Community Packages ${{ github.run_number }}"
-          files: "wgt_files/*.wgt"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   tizen-build:
     runs-on: ubuntu-latest
-    needs: [prepare, generate-matrix-build, sync]
+    needs: [prepare]
     strategy:
-      matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
+      matrix:
+        include:
+          - repo: TizenTeam/vlc-tizen
+            branch: master
+          - repo: TizenTeam/smarttv-twitch
+            branch: master
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install VLC build prerequisites
+      - name: Clone and build apps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential autoconf automake autopoint bison flex \
-            gettext pkg-config help2man nasm yasm cmake ninja-build \
-            python3 python3-pip python3-setuptools python3-wheel \
-            libtool libprotobuf-dev protobuf-compiler \
-            zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
-            libasound2-dev libpulse-dev libc6-dev
-
-      - name: List installed Tizen rootstraps
-        run: |
-          set -e
-          echo "Scanning ${TIZEN_PATH}/platforms for rootstraps..."
-          if [ -d "${TIZEN_PATH}/platforms" ]; then
-            find "${TIZEN_PATH}/platforms" -maxdepth 4 -type d
-          else
-            echo "No platforms directory found at ${TIZEN_PATH}/platforms"
-          fi
-
-      - name: Clone and build Tizen apps
-        env:
-          MAKEFLAGS: -j2
-        run: |
-          # Helper for tmpdir consistency
-          printf '%s\n' '#!/bin/bash' \
-            'export TMPDIR=/tmp' \
-            'export TEMPDIR=/tmp' \
-            'export CONFIG_SHELL=/bin/bash' \
-            'exec "$@"' | sudo tee /usr/local/bin/run_with_tmpdir >/dev/null
-          sudo chmod +x /usr/local/bin/run_with_tmpdir
-
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
           git clone --depth 1 --branch "${{ matrix.branch }}" "https://github.com/${{ matrix.repo }}.git"
@@ -189,14 +88,14 @@ jobs:
           repo_name="$(basename "${{ matrix.repo }}")"
           echo "✅ Repo detected: $repo_name"
 
-          # --- VLC-TIZEN SPECIAL BUILD PATH ---
           if [[ "$repo_name" == "vlc-tizen" ]]; then
-            echo "⚙️ Running advanced build sequence for VLC-Tizen..."
+            echo "⚙️ Running advanced VLC-Tizen build..."
 
-            echo "📁 Creating Tizen SDK compatibility layout for build scripts..."
-            sudo mkdir -p /home/runner
-            sudo rm -rf /home/runner/tizen-sdk
-            sudo ln -s "$TIZEN_PATH" /home/runner/tizen-sdk
+            sudo mkdir -p /home/runner/tizen-sdk
+            sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
+
+            # ✅ Write sdk.version safely (no YAML parse issues)
+            sudo mkdir -p /home/runner/tizen-sdk
             echo "TIZEN_SDK_MAJOR=4" | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
             echo "TIZEN_SDK_MINOR=0" | sudo tee -a /home/runner/tizen-sdk/sdk.version >/dev/null
 
@@ -210,58 +109,39 @@ jobs:
               export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
             fi
 
-            export TIZEN_SDK="/home/runner/tizen-sdk"
             export SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core/usr"
-            export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
             export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
             export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
+            export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
 
             echo "✅ Using sysroot: $SYSROOT"
-
-            # Prebuild host tools and mark them as done
-            mkdir -p vlc/extras/tools
-            touch vlc/extras/tools/.pkg-config vlc/extras/tools/.automake \
-                  vlc/extras/tools/.autoconf vlc/extras/tools/.libtool \
-                  vlc/extras/tools/.protobuf vlc/extras/tools/.meson \
-                  vlc/extras/tools/.ragel
-
-            # Patch buildvlc.sh commit check if it exists
-            if [ -f buildvlc.sh ] && grep -q "latest tested commit" buildvlc.sh; then
-              sed -i '/latest tested commit/,+5d' buildvlc.sh
-            fi
-
             chmod +x buildall.sh
-            echo "🚧 Running buildall.sh ${{ matrix.build_args }}..."
-            run_with_tmpdir env \
-              HOSTCC=gcc HOSTCXX=g++ CC_FOR_BUILD=gcc \
-              ./buildall.sh ${{ matrix.build_args }} || (
-                echo "❌ Build failed, dumping logs..."
-                find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 120 {} \; || true
-                exit 1
-              )
 
-            # Package any WGTs produced
+            ./buildall.sh -a armv7l || (
+              echo "❌ Build failed, dumping config.log..."
+              find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
+              exit 1
+            )
+
             username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
-            appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
+            appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
             output_name="${username}-${appname}.wgt"
-            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \; || true
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
 
-          # --- STANDARD WEBAPP / SIMPLE BUILD PATH ---
           else
-            echo "🌐 Running standard Tizen web build for $repo_name..."
+            echo "🌐 Running standard web build for $repo_name..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
-
             username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
-            appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
+            appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
             output_name="${username}-${appname}.wgt"
-            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \; || true
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           fi
 
-      - name: Upload WGTS to unified release
+      - name: Upload WGTS to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.sync.outputs.release_tag }}
+          tag_name: "community-${{ github.run_number }}"
           name: "Community Packages ${{ github.run_number }}"
           files: "wgt_files/*.wgt"
         env:
