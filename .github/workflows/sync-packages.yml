@@ -108,10 +108,9 @@ jobs:
             sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
             sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
 
-            sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null <<'EOF'
-TIZEN_SDK_MAJOR=4
-TIZEN_SDK_MINOR=0
-EOF
+            sudo mkdir -p /home/runner/tizen-sdk
+            sudo bash -c "echo 'TIZEN_SDK_MAJOR=4' > /home/runner/tizen-sdk/sdk.version"
+            sudo bash -c "echo 'TIZEN_SDK_MINOR=0' >> /home/runner/tizen-sdk/sdk.version"
 
             if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
               sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
