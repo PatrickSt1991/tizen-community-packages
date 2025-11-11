@@ -157,50 +157,83 @@ jobs:
 
           echo "📦 Cloning $repo ($branch)..."
           git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git"
-          cd "$(basename "$repo")"
+          cd "$(basename "$repo")" || exit 1
 
           echo "✅ Checking GCC setup..."
           gcc --version || exit 1
 
-          # --- Compat path setup ---
+          # ---- Compat path for buildall.sh ----
+          if [ ! -e /home/runner/tizen-sdk ]; then
+            sudo mkdir -p /home/runner
+            sudo ln -s "$TIZEN_PATH" /home/runner/tizen-sdk
+          fi
+          echo "4.0" | sudo tee /home/runner/tizen-sdk/sdk.version.txt >/dev/null
+          sudo mv /home/runner/tizen-sdk/sdk.version.txt /home/runner/tizen-sdk/sdk.version
+          sudo chmod 644 /home/runner/tizen-sdk/sdk.version
           sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
-          echo "4.0" | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
-          sudo ln -sf "$TIZEN_PATH" /home/runner/tizen-sdk
-          sudo ln -sf "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
-            /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
+          if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
+            sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
+              /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
+          fi
 
-          # --- Build VLC host tools (force native) ---
-          echo "🛠 Prebuilding VLC extras/tools natively..."
-          git clone https://code.videolan.org/videolan/vlc.git vlc
-          pushd vlc
-          git fetch --depth 1 origin 4e0fa1b || true
-          git checkout 4e0fa1b || true
+          # ---- Toolchain PATH ----
+          if [ -d "$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin" ]; then
+            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+          fi
 
-          # Force all extras/tools to use GCC and remove sysroot flags
-          find extras/tools -type f -name "Makefile*" -exec sed -i 's|arm-linux-gnueabi-gcc.*|gcc|g' {} +
+          # ---- Build VLC host tools natively ----
+          echo "🛠  Prebuilding VLC extras/tools natively..."
+          if [ ! -d vlc ]; then
+            echo "Cloning VLC source used by the build script..."
+            git clone https://code.videolan.org/videolan/vlc.git vlc
+            pushd vlc >/dev/null
+            git fetch --depth 1 origin 4e0fa1b || true
+            git checkout 4e0fa1b || true
+            popd >/dev/null
+          fi
+          pushd vlc >/dev/null
           make -C extras/tools -j2 CC=gcc CXX=g++ HOSTCC=gcc HOSTCXX=g++ CC_FOR_BUILD=gcc || true
-          popd
 
-          # --- Sysroot and env setup ---
-          export SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core/usr"
+          # ✅ Skip rebuilding host tools in buildall.sh later
+          echo "🧱 Marking VLC host tools as prebuilt..."
+          touch extras/tools/.pkg-config extras/tools/.automake extras/tools/.autoconf \
+                extras/tools/.libtool extras/tools/.protobuf extras/tools/.meson extras/tools/.ragel
+          popd >/dev/null
+
+          # ---- Build env for app ----
+          export TIZEN_VER=4.0
+          export TIZEN_PLATFORM=mobile
+          export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/mobile-${TIZEN_VER}-device.core"
+          export SYSROOT="$TIZEN_ROOTSTRAP/usr"
           export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
           export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
           export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
+
           echo "✅ Using sysroot: $SYSROOT"
 
-          # --- Patch buildall.sh ---
-          sed -i 's|/home/runner/tizen-sdk|'"$TIZEN_PATH"'|g' buildall.sh || true
-          sed -i 's|--sysroot=[^ ]*||g' buildall.sh || true
+          # ---- Patch buildall.sh ----
+          if [ -f buildall.sh ]; then
+            echo "🩹 Patching buildall.sh..."
+            sed -i 's|/home/runner/tizen-sdk|'"$TIZEN_PATH"'|g' buildall.sh || true
+            sed -i 's|--sysroot=[^ ]*||g' buildall.sh || true
+          fi
 
-          # --- Build ---
-          chmod +x "$build_script"
-          echo "🚧 Running $build_script $build_args..."
-          ./buildall.sh $build_args || (
-            echo "❌ Build failed, dumping config.log..."
-            find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
-            exit 1
-          )
-          find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
+          # ---- Build ----
+          if [ -n "$build_script" ] && [ -f "$build_script" ]; then
+            chmod +x "$build_script"
+            echo "🚧 Running $build_script $build_args..."
+            run_with_tmpdir "./$build_script" $build_args || (
+              echo "❌ Build failed, dumping config.log..."
+              find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
+              exit 1
+            )
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
+          else
+            echo "🌐 No build script found — performing standard web build..."
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
+            "$PACKAGE_EXP" . || true
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
+          fi
 
       - name: Upload WGTS to unified release
         uses: softprops/action-gh-release@v2
