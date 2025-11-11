@@ -1,5 +1,6 @@
 # This workflow syncs Tizen community packages.
 # It includes a fix for building VLC host-tools by using a compiler shim.
+# It now uses artifacts to pass Tizen Studio between jobs.
 
 name: Sync Tizen Community Packages
 
@@ -16,15 +17,11 @@ env:
   CERT_NAME: CommunityPack
   CERT_PASSWORD: 1234
   NODE_OPTIONS: --openssl-legacy-provider
-  # TIZEN_PATH is now defined in the 'prepare' job and output
-  # PACKAGE_EXP is also set in the 'prepare' job
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    outputs:
-      tizen_path: ${{ steps.set_tizen_path.outputs.path }}
-      package_exp: ${{ steps.set_package_exp.outputs.path }}
+    # We no longer need outputs, as we use artifacts
 
     steps:
       - uses: actions/checkout@v4
@@ -57,6 +54,7 @@ jobs:
           echo '#!/usr/bin/expect -f' > package.exp
           echo 'set timeout 300' >> package.exp
           echo 'set build_dir [lindex $argv 0]' >> package.exp
+          # Use TIZEN_PATH env var which will be set in the build job
           echo 'spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' >> package.exp
           echo 'expect {' >> package.exp
           echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
@@ -65,13 +63,19 @@ jobs:
           echo '}' >> package.exp
           chmod +x package.exp
 
-      - name: Set Tizen output path
-        id: set_tizen_path
-        run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> "$GITHUB_OUTPUT"
+      - name: Upload Tizen Studio artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tizen-studio-artifact
+          path: tizen-studio/
+          retention-days: 1 # Keep artifact for 1 day
 
-      - name: Set expect script output path
-        id: set_package_exp
-        run: echo "path=${GITHUB_WORKSPACE}/package.exp" >> "$GITHUB_OUTPUT"
+      - name: Upload expect script artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-exp-artifact
+          path: package.exp
+          retention-days: 1 # Keep artifact for 1 day
 
   generate-matrix-build:
     runs-on: ubuntu-latest
@@ -95,10 +99,29 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
     env:
-      TIZEN_PATH: ${{ needs.prepare.outputs.tizen_path }}
-      PACKAGE_EXP: ${{ needs.prepare.outputs.package_exp }}
+      # Define the paths relative to the workspace
+      TIZEN_PATH: ${{ github.workspace }}/tizen-studio
+      PACKAGE_EXP: ${{ github.workspace }}/package.exp
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download Tizen Studio artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tizen-studio-artifact
+          path: tizen-studio/ # Download into the tizen-studio directory
+
+      - name: Download expect script artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: package-exp-artifact
+          path: ./ # Download to the workspace root
+
+      - name: Make Tizen Studio tools executable
+        run: chmod -R +x tizen-studio/
+
+      - name: Make expect script executable
+        run: chmod +x package.exp
 
       - name: Clone and build project
         run: |
@@ -125,8 +148,17 @@ jobs:
             sudo bash -c "echo 'TIZEN_SDK_MINOR=0' >> /home/runner/tizen-sdk/sdk.version"
 
             if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
-              sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
-                /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
+              # Check if the source directory exists first
+              if [ -d "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" ]; then
+                sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
+                  /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
+              else
+                echo "❌ Tizen 4.0 rootstrap not found at $TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+                echo "Listing available platforms in Tizen Studio:"
+                ls -lA "$TIZEN_PATH/platforms/"
+                # This might indicate the Tizen Studio install didn't fully succeed or get the mobile packages
+                # We might need to add the Tizen 4.0 mobile package install in the 'prepare' job
+              fi
             fi
 
             # --- Sysroot env vars for pkg-config (used by buildall.sh) ---
@@ -142,69 +174,71 @@ jobs:
             
             if [ -f "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" ]; then
               echo "Moving real cross-compilers..."
-              mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
-              mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
+              sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
+              sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
             else
               echo "❌ Real cross-compilers not found at $TOOLCHAIN_BIN_DIR"
+              echo "Listing contents of $TIZEN_PATH/tools:"
+              ls -lA "$TIZEN_PATH/tools/"
               exit 1
             fi
 
             # --- GCC shim ---
             echo "Creating GCC shim..."
-            echo '#!/usr/bin/env bash' | tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
-            echo '# Check for --sysroot flag. If not present, build for host.' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo 'args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo 'has_sysroot=0' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo 'for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '#!/usr/bin/env bash' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '# Check for --sysroot flag. If not present, build for host.' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo 'args=()' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo 'has_sysroot=0' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo 'for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
             
-            echo 'if [ $has_sysroot -eq 0 ]; then' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '  # echo "SHIM: Building for HOST with native gcc"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '  host_args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '  for a in "$@"; do' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '    case "$a" in' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '      --sysroot=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '      -march=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '      -mtune=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '      -mfpu=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '      -mthumb) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '      -mfloat-abi=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '      *) host_args+=("$a") ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '    esac' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '  done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '  exec gcc "${host_args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo 'else' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '  # echo "SHIM: Cross-compiling with real gcc"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo '  exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"' "${args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
-            echo 'fi' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo 'if [ $has_sysroot -eq 0 ]; then' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '  # echo "SHIM: Building for HOST with native gcc"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '  host_args=()' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '  for a in "$@"; do' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '    case "$a" in' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '      --sysroot=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '      -march=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '      -mtune=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '      -mfpu=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '      -mthumb) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '      -mfloat-abi=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '      *) host_args+=("$a") ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '    esac' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '  done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '  exec gcc "${host_args[@]}"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo 'else' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '  # echo "SHIM: Cross-compiling with real gcc"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '  exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"' "${args[@]}"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo 'fi' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
 
             # --- G++ shim ---
             echo "Creating G++ shim..."
-            echo '#!/usr/bin/env bash' | tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
-            echo 'args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo 'has_sysroot=0' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo 'for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '#!/usr/bin/env bash' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'args=()' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'has_sysroot=0' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
             
-            echo 'if [ $has_sysroot -eq 0 ]; then' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '  # echo "SHIM: Building for HOST with native g++"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '  host_args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '  for a in "$@"; do' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '    case "$a" in' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '      --sysroot=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '      -march=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '      -mtune=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '      -mfpu=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '      -mthumb) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '      -mfloat-abi=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '      *) host_args+=("$a") ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '    esac' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '  done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '  exec g++ "${host_args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo 'else' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '  # echo "SHIM: Cross-compiling with real g++"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo '  exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"' "${args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-            echo 'fi' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo 'if [ $has_sysroot -eq 0 ]; then' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '  # echo "SHIM: Building for HOST with native g++"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '  host_args=()' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '  for a in "$@"; do' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '    case "$a" in' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '      --sysroot=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '      -march=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '      -mtune=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '      -mfpu=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '      -mthumb) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '      -mfloat-abi=*) ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '      *) host_args+=("$a") ;;' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '    esac' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '  done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '  exec g++ "${host_args[@]}"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'else' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '  # echo "SHIM: Cross-compiling with real g++"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo '  exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"' "${args[@]}"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'fi' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
 
-            chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
             
             # --- Run the repo’s build script exactly as requested ---
             build_script="${{ matrix.build_script }}"
