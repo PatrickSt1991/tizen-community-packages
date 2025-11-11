@@ -91,6 +91,7 @@ jobs:
 
       - name: Clone and build project
         run: |
+          set -e
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
           git clone --depth 1 --branch "${{ matrix.branch }}" "https://github.com/${{ matrix.repo }}.git"
@@ -100,41 +101,89 @@ jobs:
           echo "✅ Building repository: $repo_name"
 
           if [[ "$repo_name" == "vlc-tizen" ]]; then
-            echo "⚙️ Running advanced VLC build setup..."
+            echo "⚙️ Advanced VLC-Tizen setup (host-tools fix + Tizen 4.0 SDK layout)..."
 
-            # --- Safe Tizen SDK layout ---
-            sudo bash -c '
-              mkdir -p /home/runner/tizen-sdk &&
-              echo "TIZEN_SDK_MAJOR=4" > /home/runner/tizen-sdk/sdk.version &&
-              echo "TIZEN_SDK_MINOR=0" >> /home/runner/tizen-sdk/sdk.version
-            '
+            # --- Create Tizen SDK layout only for VLC ---
+            sudo mkdir -p /home/runner/tizen-sdk
             sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
-
-            # Ensure rootstrap link
             sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
+
+            sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null <<'EOF'
+TIZEN_SDK_MAJOR=4
+TIZEN_SDK_MINOR=0
+EOF
+
             if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
               sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
                 /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
             fi
 
-            # Toolchain setup
+            # --- Toolchain PATH if present ---
             if [ -d "$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin" ]; then
               export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
             fi
 
+            # --- Sysroot for pkg-config flags used later ---
             export SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core/usr"
             export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
             export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
             export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
-
             echo "✅ Using sysroot: $SYSROOT"
-            chmod +x buildall.sh
 
-            ./buildall.sh -a armv7l || (
-              echo "❌ Build failed, dumping config.log..."
-              find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
+            # --- SHIM: ensure host tools (extras/tools) use native gcc/g++ ---
+            echo "🧩 Installing host-toolchain shims for gcc/g++..."
+            SHIM_DIR="$PWD/.toolchain-shims/bin"
+            mkdir -p "$SHIM_DIR"
+            cat > "$SHIM_DIR/arm-linux-gnueabi-gcc" <<'SH'
+#!/usr/bin/env bash
+# Strip any --sysroot=... from args and delegate to native gcc (host build)
+args=()
+for a in "$@"; do
+  case "$a" in
+    --sysroot=*) ;;  # drop
+    *) args+=("$a") ;;
+  esac
+done
+exec gcc "${args[@]}"
+SH
+            cat > "$SHIM_DIR/arm-linux-gnueabi-g++" <<'SH'
+#!/usr/bin/env bash
+args=()
+for a in "$@"; do
+  case "$a" in
+    --sysroot=*) ;;
+    *) args+=("$a") ;;
+  esac
+done
+exec g++ "${args[@]}"
+SH
+            chmod +x "$SHIM_DIR/arm-linux-gnueabi-gcc" "$SHIM_DIR/arm-linux-gnueabi-g++"
+            export PATH="$SHIM_DIR:$PATH"
+
+            # --- Optional: mark common stamps to skip rebuilding some tools ---
+            touch vlc/extras/tools/.help2man \
+                  vlc/extras/tools/.libtool \
+                  vlc/extras/tools/.automake \
+                  vlc/extras/tools/.autoconf \
+                  vlc/extras/tools/.pkg-config \
+                  vlc/extras/tools/.meson \
+                  vlc/extras/tools/.ragel || true
+
+            # --- Run the repo’s build script exactly as requested ---
+            build_script="${{ matrix.build_script }}"
+            build_args="${{ matrix.build_args }}"
+            if [ -n "$build_script" ] && [ -f "$build_script" ]; then
+              chmod +x "$build_script"
+              echo "🚧 Running $build_script $build_args..."
+              "./$build_script" $build_args || (
+                echo "❌ Build failed, dumping config.log..."
+                find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 120 {} \;
+                exit 1
+              )
+            else
+              echo "❌ VLC build script not found: $build_script"
               exit 1
-            )
+            fi
 
             username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
             appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
@@ -142,7 +191,7 @@ jobs:
             find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
 
           else
-            echo "🌐 Running standard web build for $repo_name..."
+            echo "🌐 Standard web build for $repo_name..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
             username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
