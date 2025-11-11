@@ -133,29 +133,30 @@ jobs:
             echo "🧩 Installing host-toolchain shims for gcc/g++..."
             SHIM_DIR="$PWD/.toolchain-shims/bin"
             mkdir -p "$SHIM_DIR"
-            cat > "$SHIM_DIR/arm-linux-gnueabi-gcc" <<'SH'
-#!/usr/bin/env bash
-# Strip any --sysroot=... from args and delegate to native gcc (host build)
-args=()
-for a in "$@"; do
-  case "$a" in
-    --sysroot=*) ;;  # drop
-    *) args+=("$a") ;;
-  esac
-done
-exec gcc "${args[@]}"
-SH
-            cat > "$SHIM_DIR/arm-linux-gnueabi-g++" <<'SH'
-#!/usr/bin/env bash
-args=()
-for a in "$@"; do
-  case "$a" in
-    --sysroot=*) ;;
-    *) args+=("$a") ;;
-  esac
-done
-exec g++ "${args[@]}"
-SH
+            
+            # --- GCC shim ---
+            echo '#!/usr/bin/env bash' | tee "$SHIM_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '# Strip any --sysroot=... from args and delegate to native gcc (host build)' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo 'args=()' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo 'for a in "$@"; do' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo '  case "$a" in' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo '    --sysroot=*) ;;  # drop' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo '    *) args+=("$a") ;;' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo '  esac' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo 'done' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo 'exec gcc "${args[@]}"' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            
+            # --- G++ shim ---
+            echo '#!/usr/bin/env bash' | tee "$SHIM_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'args=()' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo 'for a in "$@"; do' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo '  case "$a" in' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo '    --sysroot=*) ;;' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo '    *) args+=("$a") ;;' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo '  esac' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo 'done' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo 'exec g++ "${args[@]}"' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            
             chmod +x "$SHIM_DIR/arm-linux-gnueabi-gcc" "$SHIM_DIR/arm-linux-gnueabi-g++"
             export PATH="$SHIM_DIR:$PATH"
 
