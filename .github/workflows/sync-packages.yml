@@ -1,3 +1,6 @@
+# This workflow syncs Tizen community packages.
+# It includes a fix for building VLC host-tools by using a compiler shim.
+
 name: Sync Tizen Community Packages
 
 on:
@@ -13,14 +16,15 @@ env:
   CERT_NAME: CommunityPack
   CERT_PASSWORD: 1234
   NODE_OPTIONS: --openssl-legacy-provider
-  TIZEN_PATH: ${{ github.workspace }}/tizen-studio
-  PACKAGE_EXP: ${{ github.workspace }}/package.exp
+  # TIZEN_PATH is now defined in the 'prepare' job and output
+  # PACKAGE_EXP is also set in the 'prepare' job
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
       tizen_path: ${{ steps.set_tizen_path.outputs.path }}
+      package_exp: ${{ steps.set_package_exp.outputs.path }}
 
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +57,7 @@ jobs:
           echo '#!/usr/bin/expect -f' > package.exp
           echo 'set timeout 300' >> package.exp
           echo 'set build_dir [lindex $argv 0]' >> package.exp
-          echo 'spawn $env(GITHUB_WORKSPACE)/tizen-studio/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' >> package.exp
+          echo 'spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' >> package.exp
           echo 'expect {' >> package.exp
           echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
           echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
@@ -61,9 +65,13 @@ jobs:
           echo '}' >> package.exp
           chmod +x package.exp
 
-      - name: Set output path
+      - name: Set Tizen output path
         id: set_tizen_path
         run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> "$GITHUB_OUTPUT"
+
+      - name: Set expect script output path
+        id: set_package_exp
+        run: echo "path=${GITHUB_WORKSPACE}/package.exp" >> "$GITHUB_OUTPUT"
 
   generate-matrix-build:
     runs-on: ubuntu-latest
@@ -86,6 +94,9 @@ jobs:
     needs: [prepare, generate-matrix-build]
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
+    env:
+      TIZEN_PATH: ${{ needs.prepare.outputs.tizen_path }}
+      PACKAGE_EXP: ${{ needs.prepare.outputs.package_exp }}
     steps:
       - uses: actions/checkout@v4
 
@@ -100,10 +111,11 @@ jobs:
           repo_name="$(basename "${{ matrix.repo }}")"
           echo "✅ Building repository: $repo_name"
 
+          # --- vlc-tizen build ---
           if [[ "$repo_name" == "vlc-tizen" ]]; then
             echo "⚙️ Advanced VLC-Tizen setup (host-tools fix + Tizen 4.0 SDK layout)..."
 
-            # --- Create Tizen SDK layout only for VLC ---
+            # --- Create Tizen SDK layout (as buildall.sh expects this path) ---
             sudo mkdir -p /home/runner/tizen-sdk
             sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
             sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
@@ -117,64 +129,90 @@ jobs:
                 /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
             fi
 
-            # --- Toolchain PATH if present ---
-            if [ -d "$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin" ]; then
-              export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-            fi
-
-            # --- Sysroot for pkg-config flags used later ---
+            # --- Sysroot env vars for pkg-config (used by buildall.sh) ---
             export SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core/usr"
             export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
             export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
             export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
             echo "✅ Using sysroot: $SYSROOT"
 
-            # --- SHIM: ensure host tools (extras/tools) use native gcc/g++ ---
-            echo "🧩 Installing host-toolchain shims for gcc/g++..."
-            SHIM_DIR="$PWD/.toolchain-shims/bin"
-            mkdir -p "$SHIM_DIR"
+            # --- SHIM: Intercept cross-compiler calls to build host tools ---
+            echo "🧩 Installing host-toolchain shims by replacing compilers..."
+            TOOLCHAIN_BIN_DIR="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin"
             
+            if [ -f "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" ]; then
+              echo "Moving real cross-compilers..."
+              mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
+              mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
+            else
+              echo "❌ Real cross-compilers not found at $TOOLCHAIN_BIN_DIR"
+              exit 1
+            fi
+
             # --- GCC shim ---
-            echo '#!/usr/bin/env bash' | tee "$SHIM_DIR/arm-linux-gnueabi-gcc" >/dev/null
-            echo '# Strip any --sysroot=... from args and delegate to native gcc (host build)' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo 'args=()' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo 'for a in "$@"; do' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo '  case "$a" in' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo '    --sysroot=*) ;;  # drop' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo '    *) args+=("$a") ;;' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo '  esac' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo 'done' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
-            echo 'exec gcc "${args[@]}"' >> "$SHIM_DIR/arm-linux-gnueabi-gcc"
+            echo "Creating GCC shim..."
+            echo '#!/usr/bin/env bash' | tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo '# Check for --sysroot flag. If not present, build for host.' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo 'args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo 'has_sysroot=0' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo 'for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
             
+            echo 'if [ $has_sysroot -eq 0 ]; then' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '  # echo "SHIM: Building for HOST with native gcc"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '  host_args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '  for a in "$@"; do' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '    case "$a" in' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '      --sysroot=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '      -march=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '      -mtune=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '      -mfpu=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '      -mthumb) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '      -mfloat-abi=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '      *) host_args+=("$a") ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '    esac' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '  done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '  exec gcc "${host_args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo 'else' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '  # echo "SHIM: Cross-compiling with real gcc"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo '  exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"' "${args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+            echo 'fi' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc"
+
             # --- G++ shim ---
-            echo '#!/usr/bin/env bash' | tee "$SHIM_DIR/arm-linux-gnueabi-g++" >/dev/null
-            echo 'args=()' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
-            echo 'for a in "$@"; do' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
-            echo '  case "$a" in' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
-            echo '    --sysroot=*) ;;' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
-            echo '    *) args+=("$a") ;;' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
-            echo '  esac' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
-            echo 'done' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
-            echo 'exec g++ "${args[@]}"' >> "$SHIM_DIR/arm-linux-gnueabi-g++"
+            echo "Creating G++ shim..."
+            echo '#!/usr/bin/env bash' | tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo 'has_sysroot=0' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo 'for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
             
-            chmod +x "$SHIM_DIR/arm-linux-gnueabi-gcc" "$SHIM_DIR/arm-linux-gnueabi-g++"
-            export PATH="$SHIM_DIR:$PATH"
+            echo 'if [ $has_sysroot -eq 0 ]; then' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '  # echo "SHIM: Building for HOST with native g++"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '  host_args=()' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '  for a in "$@"; do' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '    case "$a" in' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '      --sysroot=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '      -march=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '      -mtune=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '      -mfpu=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '      -mthumb) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '      -mfloat-abi=*) ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '      *) host_args+=("$a") ;;' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '    esac' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '  done' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '  exec g++ "${host_args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo 'else' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '  # echo "SHIM: Cross-compiling with real g++"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo '  exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"' "${args[@]}"' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            echo 'fi' >> "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
 
-            # --- Optional: mark common stamps to skip rebuilding some tools ---
-            touch vlc/extras/tools/.help2man \
-                  vlc/extras/tools/.libtool \
-                  vlc/extras/tools/.automake \
-                  vlc/extras/tools/.autoconf \
-                  vlc/extras/tools/.pkg-config \
-                  vlc/extras/tools/.meson \
-                  vlc/extras/tools/.ragel || true
-
+            chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            
             # --- Run the repo’s build script exactly as requested ---
             build_script="${{ matrix.build_script }}"
             build_args="${{ matrix.build_args }}"
             if [ -n "$build_script" ] && [ -f "$build_script" ]; then
               chmod +x "$build_script"
               echo "🚧 Running $build_script $build_args..."
+              # The build script will now use our shims automatically
               "./$build_script" $build_args || (
                 echo "❌ Build failed, dumping config.log..."
                 find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 120 {} \;
