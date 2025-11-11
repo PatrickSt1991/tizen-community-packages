@@ -227,7 +227,6 @@ jobs:
           echo "✅ Checking GCC setup..."
           gcc --version || exit 1
 
-          # --- Tizen environment configuration ---
           echo "⚙️ Using Tizen 4.0 environment (rootstrap from artifact)..."
           export TIZEN_VER=4.0
           export TIZEN_PLATFORM=mobile
@@ -249,6 +248,15 @@ jobs:
 
           echo "✅ Using sysroot: $SYSROOT"
           echo "✅ Compiler: $CC"
+
+          # --- Patch build script to avoid cross-compiling host tools ---
+          if grep -q "/home/runner/tizen-sdk" buildall.sh 2>/dev/null; then
+            echo "🩹 Patching buildall.sh to use native compiler for tools..."
+            sed -i 's|/home/runner/tizen-sdk|'"$TIZEN_PATH"'|g' buildall.sh
+            sed -i 's|arm-linux-gnueabi-gcc|gcc|g' buildall.sh
+            sed -i 's|arm-linux-gnueabi-g++|g++|g' buildall.sh
+            sed -i 's|--sysroot=[^ ]*||g' buildall.sh
+          fi
 
           # --- Build ---
           if [ -n "$build_script" ] && [ -f "$build_script" ]; then
