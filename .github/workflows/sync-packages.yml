@@ -22,7 +22,6 @@ jobs:
     outputs:
       tizen_path: ${{ steps.set_tizen_path.outputs.path }}
       signing_script: ${{ steps.package_exp.outputs.path }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -59,7 +58,6 @@ jobs:
 
       - name: Create expect script for signing
         id: package_exp
-        shell: bash
         run: |
           echo '#!/usr/bin/expect -f' > "${GITHUB_WORKSPACE}/package.exp"
           echo 'set timeout 300' >> "${GITHUB_WORKSPACE}/package.exp"
@@ -79,70 +77,9 @@ jobs:
         id: set_tizen_path
         run: echo "path=${GITHUB_WORKSPACE}/tizen-studio" >> "$GITHUB_OUTPUT"
 
-  generate-matrix-build:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: set-matrix
-        run: |
-          matrix=$(jq -c '{include: [to_entries[] | {
-            repo: .key,
-            branch: .value.branch,
-            build_script: (.value.build_script // ""),
-            build_args: (.value.build_args // ""),
-            skip_npm: (.value.skip_npm // false)
-          }]}' repos-build.json)
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
-  sync:
-    runs-on: ubuntu-latest
-    needs: prepare
-    outputs:
-      release_tag: ${{ steps.tag.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create unified release tag
-        id: tag
-        run: |
-          tag="community-${GITHUB_RUN_NUMBER}-$(date +%Y%m%d-%H%M%S)"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      - name: Download WGTs from repos-sync.json
-        run: |
-          mkdir -p wgt_files
-          jq -c '.releases | to_entries[]' repos-sync.json | while read -r entry; do
-            repo=$(echo "$entry" | jq -r '.key')
-            api="https://api.github.com/repos/$repo/releases/latest"
-            latest_tag=$(curl -s "$api" | jq -r '.tag_name // empty')
-            [ -z "$latest_tag" ] && continue
-            assets=$(curl -s "$api" | jq -r '.assets[]?.browser_download_url // empty')
-            for url in $assets; do
-              if [[ "$url" == *.wgt ]]; then
-                username=$(echo "$repo" | cut -d'/' -f1)
-                appname=$(basename "$repo" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
-                filename="${username}-${appname}.wgt"
-                wget -q -O "wgt_files/$filename" "$url"
-              fi
-            done
-          done
-
-      - name: Upload WGTS to unified release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: "Community Packages ${{ github.run_number }}"
-          files: "wgt_files/*.wgt"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   tizen-build:
     runs-on: ubuntu-latest
-    needs: [prepare, generate-matrix-build, sync]
-    strategy:
-      matrix: ${{ fromJson(needs.generate-matrix-build.outputs.matrix) }}
+    needs: prepare
     steps:
       - uses: actions/checkout@v4
 
@@ -157,126 +94,63 @@ jobs:
             zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
             libasound2-dev libpulse-dev libc6-dev
 
-      - name: List installed Tizen rootstraps
-        run: |
-          set -e
-          echo "Scanning ${TIZEN_PATH}/platforms for rootstraps..."
-          if [ -d "${TIZEN_PATH}/platforms" ]; then
-            find "${TIZEN_PATH}/platforms" -maxdepth 4 -type d
-          else
-            echo "No platforms directory found at ${TIZEN_PATH}/platforms"
-          fi
-
-      - name: Clone and build project
-        shell: bash
+      - name: Clone and build VLC-Tizen
         run: |
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
-          repo="${{ matrix.repo }}"
-          branch="${{ matrix.branch }}"
-          build_script="${{ matrix.build_script }}"
-          build_args="${{ matrix.build_args }}"
-          username=$(echo "$repo" | cut -d'/' -f1)
-          appname=$(basename "$repo") ; appname=$(echo "$appname" | sed 's/-tizen//;s/-chrome//;s/-no-gamemode//;s/-//g')
-          output_name="${username}-${appname}.wgt"
-
-          echo "📦 Cloning $repo ($branch)..."
-          git clone --depth 1 --single-branch --branch "$branch" "https://github.com/$repo.git"
-          cd "$(basename "$repo")" || exit 1
-
-          # --- ensure run_with_tmpdir exists (your last log missed it) ---
-          printf '%s\n' '#!/bin/bash' \
-            'export TMPDIR=/tmp' \
-            'export TEMPDIR=/tmp' \
-            'export CONFIG_SHELL=/bin/bash' \
-            'exec "$@"' | sudo tee /usr/local/bin/run_with_tmpdir >/dev/null
-          sudo chmod +x /usr/local/bin/run_with_tmpdir
+          git clone --depth 1 --branch master https://github.com/TizenTeam/vlc-tizen.git
+          cd vlc-tizen
 
           echo "✅ Checking GCC setup..."
           gcc --version || exit 1
 
-          # ---- Compat path for buildall.sh ----
-          if [ ! -e /home/runner/tizen-sdk ]; then
-            sudo mkdir -p /home/runner
-            sudo ln -s "$TIZEN_PATH" /home/runner/tizen-sdk
-          fi
-
-          # Correct content expected by the build scripts:
-          # (your log showed it tried to *execute* "4.0")
-          cat <<'EOF' | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
+          echo "📁 Creating Tizen SDK compatibility symlink..."
+          sudo mkdir -p /home/runner
+          sudo ln -sf "$TIZEN_PATH" /home/runner/tizen-sdk
+          cat <<EOF | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
 TIZEN_SDK_MAJOR=4
 TIZEN_SDK_MINOR=0
 EOF
-          sudo chmod 644 /home/runner/tizen-sdk/sdk.version
 
-          # Rootstrap symlink expected by legacy scripts
           sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
-          if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
-            sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
-              /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
-          fi
+          sudo ln -sf "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
+            /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
 
-          # Toolchain PATH (if present in Studio 4.0)
-          if [ -d "$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin" ]; then
-            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-          fi
+          echo "✅ Creating run_with_tmpdir helper..."
+          echo '#!/bin/bash' | sudo tee /usr/local/bin/run_with_tmpdir >/dev/null
+          echo 'export TMPDIR=/tmp' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
+          echo 'export TEMPDIR=/tmp' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
+          echo 'export CONFIG_SHELL=/bin/bash' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
+          echo 'exec "$@"' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
+          sudo chmod +x /usr/local/bin/run_with_tmpdir
 
-          # ---- Prebuild/mark host tools so they don't rebuild with ARM toolchain ----
-          echo "🛠  Prebuilding/marking VLC extras/tools for host..."
-          if [ ! -d vlc ]; then
-            echo "Cloning VLC source used by the build script..."
-            git clone https://code.videolan.org/videolan/vlc.git vlc
-            pushd vlc >/dev/null
-            # checkout the commit referenced in vlc-tizen build scripts
-            git fetch --depth 1 origin 4e0fa1b || true
-            git checkout 4e0fa1b || true
-            popd >/dev/null
-          fi
-          pushd vlc >/dev/null
-          make -C extras/tools -j2 CC=gcc CXX=g++ HOSTCC=gcc HOSTCXX=g++ CC_FOR_BUILD=gcc || true
-          # stamp files so buildall.sh skips them even if Makefiles aren't present
+          echo "🛠  Prebuilding VLC extras/tools..."
+          git clone https://code.videolan.org/videolan/vlc.git vlc
+          cd vlc
+          git fetch --depth 1 origin 4e0fa1b || true
+          git checkout 4e0fa1b || true
+          make -C extras/tools -j2 CC=gcc CXX=g++ || true
           touch extras/tools/.pkg-config extras/tools/.automake extras/tools/.autoconf \
                 extras/tools/.libtool extras/tools/.protobuf extras/tools/.meson extras/tools/.ragel || true
-          popd >/dev/null
+          cd ..
 
-          # ---- Build env for app (sysroot for includes/libs) ----
-          export TIZEN_VER=4.0
-          export TIZEN_PLATFORM=mobile
-          export TIZEN_ROOTSTRAP="$TIZEN_PATH/platforms/tizen-${TIZEN_VER}/${TIZEN_PLATFORM}/rootstraps/mobile-${TIZEN_VER}-device.core"
-          export SYSROOT="$TIZEN_ROOTSTRAP/usr"
-          export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
-          export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
-          export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
-          echo "✅ Using sysroot: $SYSROOT"
+          echo "🩹 Patching buildall.sh..."
+          sed -i 's|/home/runner/tizen-sdk|'"$TIZEN_PATH"'|g' buildall.sh || true
+          sed -i 's|--sysroot=[^ ]*||g' buildall.sh || true
 
-          # ---- Patch buildall.sh: fix paths and remove stale --sysroot flags ----
-          if [ -f buildall.sh ]; then
-            echo "🩹 Patching buildall.sh..."
-            sed -i 's|/home/runner/tizen-sdk|'"$TIZEN_PATH"'|g' buildall.sh || true
-            sed -i 's|--sysroot=[^ ]*||g' buildall.sh || true
-          fi
+          echo "🚧 Running buildall.sh..."
+          /usr/local/bin/run_with_tmpdir ./buildall.sh -a armv7l || (
+            echo "❌ Build failed, dumping config.log..."
+            find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
+            exit 1
+          )
 
-          # --- Build ---
-          if [ -n "$build_script" ] && [ -f "$build_script" ]; then
-            chmod +x "$build_script"
-            echo "🚧 Running $build_script $build_args..."
-            /usr/local/bin/run_with_tmpdir "./$build_script" $build_args || (
-              echo "❌ Build failed, dumping config.log..."
-              find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
-              exit 1
-            )
-            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
-          else
-            echo "🌐 No build script found — performing standard web build..."
-            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-            "$PACKAGE_EXP" . || true
-            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
-          fi
+          find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/" \;
 
-      - name: Upload WGTS to unified release
+      - name: Upload WGTS to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.sync.outputs.release_tag }}
+          tag_name: "community-${{ github.run_number }}"
           name: "Community Packages ${{ github.run_number }}"
           files: "wgt_files/*.wgt"
         env:
