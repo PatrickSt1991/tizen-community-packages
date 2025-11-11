@@ -107,21 +107,21 @@ jobs:
           echo "📁 Creating Tizen SDK compatibility symlink..."
           sudo mkdir -p /home/runner
           sudo ln -sf "$TIZEN_PATH" /home/runner/tizen-sdk
-          cat <<EOF | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
-TIZEN_SDK_MAJOR=4
-TIZEN_SDK_MINOR=0
-EOF
+          echo 'TIZEN_SDK_MAJOR=4' | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
+          echo 'TIZEN_SDK_MINOR=0' | sudo tee -a /home/runner/tizen-sdk/sdk.version >/dev/null
 
           sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
           sudo ln -sf "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
             /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
 
           echo "✅ Creating run_with_tmpdir helper..."
-          echo '#!/bin/bash' | sudo tee /usr/local/bin/run_with_tmpdir >/dev/null
-          echo 'export TMPDIR=/tmp' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
-          echo 'export TEMPDIR=/tmp' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
-          echo 'export CONFIG_SHELL=/bin/bash' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
-          echo 'exec "$@"' | sudo tee -a /usr/local/bin/run_with_tmpdir >/dev/null
+          {
+            echo '#!/bin/bash'
+            echo 'export TMPDIR=/tmp'
+            echo 'export TEMPDIR=/tmp'
+            echo 'export CONFIG_SHELL=/bin/bash'
+            echo 'exec "$@"'
+          } | sudo tee /usr/local/bin/run_with_tmpdir >/dev/null
           sudo chmod +x /usr/local/bin/run_with_tmpdir
 
           echo "🛠  Prebuilding VLC extras/tools..."
