@@ -166,8 +166,7 @@ jobs:
             sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
 
             sudo mkdir -p /home/runner/tizen-sdk
-            sudo bash -c "echo 'TIZEN_SDK_MAJOR=4' > /home/runner/tizen-sdk/sdk.version"
-            sudo bash -c "echo 'TIZEN_SDK_MINOR=0' >> /home/runner/tizen-sdk/sdk.version"
+            sudo bash -c "echo 'TIZEN_SDK_VERSION=4.0' > /home/runner/tizen-sdk/sdk.version"
 
             if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
               # Check if the source directory exists first
