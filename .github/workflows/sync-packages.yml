@@ -50,11 +50,10 @@ jobs:
           curl -L -o rootstrap.zip "$BASE_URL/$ROOTSTRAP_ZIP"
           unzip -o rootstrap.zip -d "${GITHUB_WORKSPACE}/tizen-studio/"
       
-          mkdir -p "${GITHUB_WORKSPACE}/tizen-studio/tools"
-          unzip -o toolchain.zip "data/tools/*" -d "${GITHUB_WORKSPACE}/tizen-studio/"
-          mv "${GITHUB_WORKSPACE}/tizen-studio/data/tools/arm-linux-gnueabi-gcc-4.9" \
-             "${GITHUB_WORKSPACE}/tizen-studio/tools/"
-          rm -rf "${GITHUB_WORKSPACE}/tizen-studio/data"
+          echo "Installing GCC 4.9 Toolchain..."
+          TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
+          curl -L -o toolchain.zip "$BASE_URL/$TOOLCHAIN_ZIP"
+          unzip -o toolchain.zip -d "${GITHUB_WORKSPACE}/tizen-studio/"
       
           echo "Done."
           rm rootstrap.zip toolchain.zip
