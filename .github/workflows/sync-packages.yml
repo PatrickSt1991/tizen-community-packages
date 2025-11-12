@@ -40,6 +40,30 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
+      - name: Install Tizen 4.0 Rootstrap and Toolchain
+        run: |
+          echo "Downloading missing Tizen 4.0 components from Tizen binary archive..."
+          BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
+          
+          # 1. Install the Mobile 4.0 Rootstrap
+          # This is the "mobile-4.0-device.core" rootstrap
+          echo "Installing Mobile 4.0 Rootstrap..."
+          ROOTSTRAP_ZIP="mobile-4.0-rs-device.core_0.0.47_ubuntu-64.zip"
+          curl -L -o rootstrap.zip "$BASE_URL/$ROOTSTRAP_ZIP"
+          # Unzip the rootstrap. It contains the path 'platforms/tizen/4.0/rootstraps/mobile-4.0-device.core'
+          unzip rootstrap.zip -d "${GITHUB_WORKSPACE}/tizen-studio/"
+          
+          # 2. Install the GCC 4.9 Toolchain
+          # This is the "arm-linux-gnueabi-gcc-4.9" toolchain
+          echo "Installing GCC 4.9 Toolchain..."
+          TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
+          curl -L -o toolchain.zip "$BASE_URL/$TOOLCHAIN_ZIP"
+          # Unzip the toolchain. It contains the path 'tools/arm-linux-gnueabi-gcc-4.9'
+          unzip toolchain.zip -d "${GITHUB_WORKSPACE}/tizen-studio/"
+          
+          echo "Done."
+          rm rootstrap.zip toolchain.zip
+
       - name: Create signing certificate
         run: |
           mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
