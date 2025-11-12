@@ -1,6 +1,5 @@
 # This workflow syncs Tizen community packages.
-# It includes a fix for building VLC host-tools by using a compiler shim.
-# It now uses artifacts to pass Tizen Studio between jobs.
+# Includes fixes for host-tools builds and corrects Tizen 4.0 SDK layout.
 
 name: Sync Tizen Community Packages
 
@@ -42,7 +41,7 @@ jobs:
       - name: Install Tizen 4.0 Rootstrap and Toolchain
         run: |
           set -e
-          echo "Downloading missing Tizen 4.0 components from Tizen binary archive..."
+          echo "Downloading missing Tizen 4.0 components..."
           BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
@@ -138,11 +137,8 @@ jobs:
           name: package-exp-artifact
           path: ./
 
-      - name: Make Tizen Studio tools executable
-        run: chmod -R +x tizen-studio/
-
-      - name: Make expect script executable
-        run: chmod +x package.exp
+      - name: Make tools executable
+        run: chmod -R +x tizen-studio/ && chmod +x package.exp
 
       - name: Clone and build project
         run: |
@@ -186,14 +182,14 @@ jobs:
             fi
 
             echo '#!/usr/bin/env bash
-            args=(); has_sysroot=0
-            for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done
-            if [ $has_sysroot -eq 0 ]; then exec gcc "${args[@]}"; else exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"' "${args[@]}"; fi' \
+args=(); has_sysroot=0
+for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done
+if [ $has_sysroot -eq 0 ]; then exec gcc "${args[@]}"; else exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"' "${args[@]}"; fi' \
               | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
             echo '#!/usr/bin/env bash
-            args=(); has_sysroot=0
-            for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done
-            if [ $has_sysroot -eq 0 ]; then exec g++ "${args[@]}"; else exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"' "${args[@]}"; fi' \
+args=(); has_sysroot=0
+for a in "$@"; do case "$a" in --sysroot=*) has_sysroot=1 ;; esac; args+=("$a"); done
+if [ $has_sysroot -eq 0 ]; then exec g++ "${args[@]}"; else exec '"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"' "${args[@]}"; fi' \
               | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
             sudo chmod +x "$TOOLCHAIN_BIN_DIR/"arm-linux-gnueabi-g{cc,++}"
 
@@ -211,6 +207,20 @@ jobs:
               echo "❌ VLC build script not found: $build_script"
               exit 1
             fi
+
+            username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
+            appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
+            output_name="${username}-${appname}.wgt"
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
+
+          else
+            echo "🌐 Standard web build for $repo_name..."
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
+            "$PACKAGE_EXP" . || true
+            username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
+            appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
+            output_name="${username}-${appname}.wgt"
+            find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
           fi
 
       - name: Upload WGTS to release
