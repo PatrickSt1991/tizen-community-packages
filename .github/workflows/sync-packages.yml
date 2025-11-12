@@ -266,6 +266,8 @@ jobs:
             build_args="${{ matrix.build_args }}"
             if [ -n "$build_script" ] && [ -f "$build_script" ]; then
               chmod +x "$build_script"
+              export CC=gcc
+              export CXX=g++
               echo "🚧 Running $build_script $build_args..."
               # The build script will now use our shims automatically
               "./$build_script" $build_args || (
