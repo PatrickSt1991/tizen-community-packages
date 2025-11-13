@@ -194,37 +194,68 @@ jobs:
           ###################################################
           if [[ "$repo_name" == "vlc-tizen" ]]; then
             echo "⚙️ Using local Tizen Studio SDK..."
-
+          
             SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
             echo "🔧 Using sysroot: $SYSROOT"
-
-            # Fix missing sdk.version required by buildall.sh
+          
+            # -------------------------------
+            # Fix missing sdk.version (required by buildall.sh)
+            # -------------------------------
             if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
               echo "4.0" > "$TIZEN_SDK/sdk.version"
               echo "📄 Created sdk.version"
             fi
-
-            # Ensure cross-compiler is accessible
+          
+            # -------------------------------
+            # 1) Build VLC extras/tools with HOST compiler
+            # -------------------------------
+            echo "🔨 Building VLC tools (host native)..."
+          
+            # Force real GNU build tools for HOST
+            export CC=/usr/bin/gcc
+            export CXX=/usr/bin/g++
+            export LD=/usr/bin/ld
+            export AR=/usr/bin/ar
+            export AS=/usr/bin/as
+            export STRIP=/usr/bin/strip
+            export CC_FOR_BUILD=/usr/bin/gcc
+            export CXX_FOR_BUILD=/usr/bin/g++
+          
+            # Clear any cross-contamination
+            unset TARGET_CC
+            unset TARGET_CXX
+            unset CHOST
+            unset CROSS_COMPILE
+            unset CFLAGS
+            unset LDFLAGS
+            unset CPPFLAGS
+            export PKG_CONFIG=false
+          
+            # Build tools separately
+            cd vlc/extras/tools
+            ./bootstrap
+            make -j4
+            cd ../../..
+          
+            # -------------------------------
+            # 2) Now enable TARGET cross-compiler for real VLC build
+            # -------------------------------
+            echo "🔧 Switching to Tizen ARM cross compiler..."
+          
             export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-
-            # Host compiler for extras/tools
-            export CC=gcc
-            export CXX=g++
-            export LD=ld
-            export AR=ar
-            export AS=as
-            export STRIP=strip
-
-            # Target compiler for VLC main build
+          
             export TARGET_CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
             export TARGET_CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-
-            echo "🔨 Building VLC (tizen)..."
+          
+            echo "🔨 Building VLC (Tizen ARM)..."
             ./buildall.sh -a armv7l
-
+          
+            # -------------------------------
+            # 3) Package WGT (signed)
+            # -------------------------------
             echo "📦 Packaging VLC WGT..."
             expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)"
-
+          
             cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
 
           ###################################################
