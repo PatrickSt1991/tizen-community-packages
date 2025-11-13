@@ -38,37 +38,33 @@ jobs:
       - name: Install Tizen 4.0 Rootstrap and Toolchain
         run: |
           set -e
+          echo "Downloading missing Tizen 4.0 components..."
           BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
           echo "📦 Downloading rootstrap..."
           ROOTSTRAP_ZIP="mobile-4.0-rs-device.core_0.0.47_ubuntu-64.zip"
-          curl -L -o "$WORKDIR/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
+          curl -L -o "${WORKDIR}/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
 
           echo "📂 Extracting rootstrap..."
-          unzip -o "$WORKDIR/rootstrap.zip" -d "$WORKDIR/"
-
-          ROOTSTRAP_SRC="$WORKDIR/data/platforms/tizen-4.0/mobile-4.0-device.core"
-          ROOTSTRAP_DEST="$WORKDIR/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          unzip -o "${WORKDIR}/rootstrap.zip" -d "${WORKDIR}/"
 
           echo "📁 Moving rootstrap to SDK location..."
-          mkdir -p "$(dirname "$ROOTSTRAP_DEST")"
-          mv "$ROOTSTRAP_SRC" "$ROOTSTRAP_DEST"
+          # After unzip we have: ${WORKDIR}/data/platforms/tizen-4.0/...
+          mkdir -p "${WORKDIR}/platforms"
+          mv "${WORKDIR}/data/platforms" "${WORKDIR}/platforms"
+          rm -rf "${WORKDIR}/data"
+          rm "${WORKDIR}/rootstrap.zip"
 
-          if [ ! -d "$ROOTSTRAP_DEST" ]; then
-            echo "❌ Rootstrap was NOT installed properly!"
-            exit 1
-          fi
-
-          rm -rf "$WORKDIR/data" "$WORKDIR/rootstrap.zip"
-
-          echo "📦 Installing GCC 4.9 toolchain..."
+          echo "Installing GCC 4.9 Toolchain..."
           TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
-          curl -L -o "$WORKDIR/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
+          curl -L -o "${WORKDIR}/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
+          unzip -o "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/"
+          mv "${WORKDIR}/data/tools/arm-linux-gnueabi-gcc-4.9" "${WORKDIR}/tools/"
+          rm -rf "${WORKDIR}/data"
+          rm "${WORKDIR}/toolchain.zip"
 
-          unzip -o "$WORKDIR/toolchain.zip" "data/tools/*" -d "$WORKDIR/"
-          mv "$WORKDIR/data/tools/arm-linux-gnueabi-gcc-4.9" "$WORKDIR/tools/"
-          rm -rf "$WORKDIR/data" "$WORKDIR/toolchain.zip"
+          echo "✅ Rootstrap and Toolchain installed successfully."
 
       - name: Create signing certificate
         run: |
