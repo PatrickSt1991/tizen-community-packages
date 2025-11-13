@@ -216,6 +216,11 @@ jobs:
               pushd vlc
               git checkout 4e0fa1b
               popd
+
+              echo "🔧 Patching VLC contribs to avoid dead libav server..."
+              sed -i 's#git://git.libav.org/libav.git#https://github.com/videolan/ffmpeg.git#g' \
+                vlc/contrib/src/ffmpeg/rules.mak
+              sed -i 's#HEAD#n4.4#g' vlc/contrib/src/ffmpeg/rules.mak
             fi
 
             pushd vlc/extras/tools
