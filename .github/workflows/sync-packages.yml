@@ -170,8 +170,8 @@ jobs:
         - name: Clone and build project
           shell: bash
           env:
-            TIZEN_SDK: ${{ github.workspace }}/tizen-studio
-            TIZEN_PATH: ${{ github.workspace }}/tizen-studio
+            TIZEN_SDK: ${{ github.workspace }/tizen-studio
+            TIZEN_PATH: ${{ github.workspace }/tizen-studio
           run: |
             set -e
   
@@ -257,10 +257,17 @@ jobs:
               mkdir -p vlc/contrib/tarballs/
               
               # -------------------------------------------------------
-              # 🔥 FIX FAILED FFMPEG GIT CLONE (from previous fix)
+              # 🔥 FIX FAILED FFMPEG GIT CLONE
               # -------------------------------------------------------
+              
+              # This is the new, working command for the Makefile rule.
+              # Note: It must be indented with a TAB for the Makefile.
               NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
-              sed -i "/git\.libav\.org/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
+              
+              # Use sed to find the line containing the broken 'git clone' 
+              # command and replace it entirely with our new curl-based command.
+              # <--- THIS IS THE MODIFIED LINE
+              sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD && git clone/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
               
               # 🔥 FIX DEAD FREETYPE MIRROR
               sed -i '
@@ -275,7 +282,7 @@ jobs:
               pushd vlc/extras/tools
               
               # -------------------------------------------------------
-              # 🔥 **NEW FIX:** Patch dead GNU FTP links for autotools
+              # 🔥 FIX: Patch dead GNU FTP links for autotools
               # -------------------------------------------------------
               echo "🔧 Applying patches for dead GNU FTP links..."
               TOOLS_MAK="tools.mak"
@@ -298,7 +305,7 @@ jobs:
               echo "📦 Packaging VLC WGT..."
               expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
   
-              cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
+              cp -r ./*.wgt "$GITHUB_WELCOM_WORKSPACE/wgt_files/" 2>/dev/null || true
   
             ###################################################
             #               ALL OTHER WEB PROJECTS
@@ -307,7 +314,7 @@ jobs:
               echo "🌐 Standard web build for $repo_name..."
   
               "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-              "$TIZEN_PATH/tools/ide/bin/tizen" package -t wgt -o "$GITHUB_WORKSPACE/wg_files/" || true
+              "$TIZEN_PATH/tools/ide/bin/tizen" package -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
             fi
   
         # ---------------------------------------------------
@@ -320,8 +327,8 @@ jobs:
             name: "Community Packages ${{ github.run_number }}"
             files: "wgt_files/*.wgt"
           env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          
+            
   publish-release:
     runs-on: ubuntu-latest
     needs: tizen-build
