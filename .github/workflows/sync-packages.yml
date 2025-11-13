@@ -210,7 +210,7 @@ jobs:
             # BUT force compatibility with old VLC toolchain (C++03)
             #############################################################
             echo "🔧 Prebuilding VLC tools (native GCC, C++03)..."
-
+            
             if [[ ! -d vlc ]]; then
               git clone https://code.videolan.org/videolan/vlc.git vlc
               pushd vlc
@@ -218,21 +218,38 @@ jobs:
               popd
             fi
             
-            echo "🔧 Patching VLC contribs to avoid dead libav server..."
-            
+            echo "🔧 Making Tizen cross-compiler executable..."
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
             
-            echo "🔧 Patching VLC FFmpeg contrib to use tarball instead of git clone"
+            ############################################################
+            # 🔥 REAL fix: libav server is dead → replace with FFmpeg
+            ############################################################
+            echo "🔧 Replacing libav dead server with FFmpeg 4.4 tarball..."
             
             FF_URL="https://www.ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             
             mkdir -p vlc/contrib/tarballs/ffmpeg-HEAD
-
-            sed -i 's#\$(GIT) clone.*#curl -L '"$FF_URL"' -o ffmpeg.tar.xz#g' vlc/contrib/src/ffmpeg/rules.mak
-            sed -i 's#cd ffmpeg-HEAD.*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g' vlc/contrib/src/ffmpeg/rules.mak
-            sed -i 's#rm -Rf ffmpeg-HEAD.*#rm -f ffmpeg.tar.xz#g' vlc/contrib/src/ffmpeg/rules.mak
-
+            
+            # 1. Replace the git://libav URL
+            sed -i 's#git://git\.libav\.org/libav\.git#'"$FF_URL"'#' \
+              vlc/contrib/src/ffmpeg/rules.mak
+            
+            # 2. Replace git clone with curl download
+            sed -i 's#$(GIT) clone.*#curl -L '"$FF_URL"' -o ffmpeg.tar.xz#g' \
+              vlc/contrib/src/ffmpeg/rules.mak
+            
+            # 3. Replace checkout step with tar extraction
+            sed -i 's#cd ffmpeg-HEAD.*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g' \
+              vlc/contrib/src/ffmpeg/rules.mak
+            
+            # 4. Replace cleanup step
+            sed -i 's#rm -Rf ffmpeg-HEAD.*#rm -f ffmpeg.tar.xz#g' \
+              vlc/contrib/src/ffmpeg/rules.mak
+            
+            ############################################################
+            # Build VLC extras/tools
+            ############################################################
             pushd vlc/extras/tools
             export CC=gcc
             export CXX=g++
