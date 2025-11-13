@@ -216,72 +216,69 @@ jobs:
 
             #############################################################
             # Step 2 — Patch REAL contrib rules (ffmpeg + freetype)
-            # (VLC stores them in vlc/contrib, NOT extras/tools)
             #############################################################
             echo "🔧 Patching REAL VLC contrib ffmpeg + freetype rules…"
             
             FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
             
-            # find the actual rules used by contrib
+            # discover actual rule files
             FFMPEG_RULES="$(find vlc/contrib/src/ffmpeg -type f -name 'rules.mak*' | head -n1)"
             FREETYPE_RULES="$(find vlc/contrib/src/freetype2 -type f -name 'rules.mak*' | head -n1)"
             
-            echo "🔧 FFmpeg rules file: ${FFMPEG_RULES:-<missing>}"
-            echo "🔧 Freetype rules file: ${FREETYPE_RULES:-<missing>}"
+            echo "FFmpeg rules: $FFMPEG_RULES"
+            echo "Freetype rules: $FREETYPE_RULES"
             
-            if [[ -z "$FFMPEG_RULES" || ! -f "$FFMPEG_RULES" ]]; then
-              echo "❌ ffmpeg rules.mak not found under vlc/contrib/src/ffmpeg"
-              exit 1
+            if [[ ! -f "$FFMPEG_RULES" ]]; then
+                echo "❌ ffmpeg rules.mak missing"
+                exit 1
             fi
             
-            # 1) Repoint dead libav remote if present (simple string swap, multiline-safe)
-            if grep -qE 'git(\+ssh)?:\/\/git\.libav\.org\/libav\.git' "$FFMPEG_RULES"; then
-              sed -i 's#git\+ssh\?://git\.libav\.org/libav\.git#https://github.com/libav/libav.git#g' "$FFMPEG_RULES"
-              echo "🔧 Repointed libav remote to GitHub mirror."
+            #############################################################
+            # Fix broken libav repo → replace anything pointing to git.libav.org
+            #############################################################
+            sed -i -E 's#git(\+ssh)?://git\.libav\.org/libav\.git#https://github.com/libav/libav.git#g' "$FFMPEG_RULES" || true
+            
+            #############################################################
+            # Force override ffmpeg-HEAD.tar.xz rule WITHOUT HEREDOC
+            #############################################################
+            printf "\n# --- CI override for ffmpeg-HEAD ---\n" >> "$FFMPEG_RULES"
+            printf '%s\n' \
+            '$(TARBALLS)/ffmpeg-HEAD.tar.xz:' \
+            '	TEMP_DIR=$(TARBALLS)/ffmpeg-HEAD; rm -Rf $$TEMP_DIR; mkdir -p $$TEMP_DIR;' \
+            "	curl -f -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C $$TEMP_DIR;" \
+            '	( cd $(TARBALLS) && tar cvJ ffmpeg-HEAD ) > $(TARBALLS)/ffmpeg-HEAD.tar.xz;' \
+            '	rm -Rf $$TEMP_DIR' \
+            >> "$FFMPEG_RULES"
+            
+            echo "✅ ffmpeg override added."
+            
+            #############################################################
+            # Patch freetype 2.6.1 rule
+            #############################################################
+            if [[ -f "$FREETYPE_RULES" ]]; then
+                sed -i -E "s#https?://[^ ]*freetype[^ ]*2\.6\.1[^ ]*#$FREETYPE_URL#g" "$FREETYPE_RULES" || true
+            
+                printf "\n# --- CI override for freetype 2.6.1 ---\n" >> "$FREETYPE_RULES"
+                printf '%s\n' \
+            '$(TARBALLS)/freetype-2.6.1.tar.gz:' \
+            "	curl -f -L \"$FREETYPE_URL\" > \"\$(TARBALLS)/freetype-2.6.1.tar.gz\"" \
+            >> "$FREETYPE_RULES"
+            
+                echo "✅ freetype override added."
             fi
             
-            # 2) Hard‑override the ffmpeg-HEAD tarball rule (last rule wins in make)
-            #    This avoids *any* git clone path and always seeds from a known tarball.
-            echo "🔧 Appending override for ffmpeg-HEAD tarball rule…"
-            cat >> "$FFMPEG_RULES" <<EOF
+            #############################################################
+            # Pre-seed freetype tarball (always available)
+            #############################################################
+            mkdir -p vlc/contrib/tarballs
             
-            # --- override added by CI to avoid dead libav git ---
-            \$(TARBALLS)/ffmpeg-HEAD.tar.xz:
-            \tTEMP_DIR=\$(TARBALLS)/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; \\
-            curl -f -L "$FFMPEG_URL" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; \\
-            ( cd \$(TARBALLS) && tar cvJ ffmpeg-HEAD ) > \$(TARBALLS)/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR
-            EOF
-            
-            # 3) Fix freetype mirror and override the download target explicitly
-            if [[ -n "$FREETYPE_RULES" && -f "$FREETYPE_RULES" ]]; then
-              # replace any old SourceForge/mirror URL text if present
-              sed -i "s#http://[^ ]*freetype[^ ]*2\.6\.1[^ ]*#$FREETYPE_URL#g" "$FREETYPE_RULES" || true
-            
-              # append an explicit target so our URL is definitely used
-              echo "🔧 Appending override for freetype-2.6.1 tarball rule…"
-              cat >> "$FREETYPE_RULES" <<EOF
-            
-            # --- override added by CI to avoid dead SourceForge mirrors ---
-            \$(TARBALLS)/freetype-2.6.1.tar.gz:
-            \tcurl -f -L -- "$FREETYPE_URL" > "\$(TARBALLS)/freetype-2.6.1.tar.gz"
-            EOF
-            else
-              echo "⚠️ freetype rules.mak not found; continuing"
+            if [[ ! -s vlc/contrib/tarballs/freetype-2.6.1.tar.gz ]]; then
+                echo "⬇️ Pre-seeding freetype-2.6.1"
+                curl -fL -o vlc/contrib/tarballs/freetype-2.6.1.tar.gz "$FREETYPE_URL"
             fi
             
-            # 4) Debug: show the effective rules Make will use
-            echo "🔍 DEBUG: Effective ffmpeg rule (searching for ffmpeg-HEAD.tar.xz)…"
-            grep -n 'ffmpeg-HEAD\.tar\.xz' -n "$FFMPEG_RULES" || true
-            sed -n '1,400p' "$FFMPEG_RULES" | sed -n '/ffmpeg-HEAD\.tar\.xz/,+5p' || true
-            
-            if [[ -n "$FREETYPE_RULES" && -f "$FREETYPE_RULES" ]]; then
-              echo "🔍 DEBUG: Effective freetype rule (searching for freetype-2.6.1.tar.gz)…"
-              grep -n 'freetype-2\.6\.1\.tar\.gz' -n "$FREETYPE_RULES" || true
-              sed -n '1,200p' "$FREETYPE_RULES" | sed -n '/freetype-2\.6\.1\.tar\.gz/,+3p' || true
-            fi
-            
-            echo "✅ Contrib patches in place."
+            echo "✅ Contrib rule patches completed."
 
             #############################################################
             # Step 3 — Build extras/tools with HOST compiler
