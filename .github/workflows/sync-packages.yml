@@ -189,48 +189,39 @@ jobs:
           ###################################################
           if [[ "$repo_name" == "vlc-tizen" ]]; then
             echo "⚙️ Using local Tizen Studio SDK..."
-
+          
             SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
             echo "🔧 Using sysroot: $SYSROOT"
-
-            # Proper sdk.version (some scripts source this file!)
+          
+            # Proper sdk.version
             if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
               printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
               chmod +x "$TIZEN_SDK/sdk.version"
               echo "📄 Created sdk.version script"
             fi
-
+          
             echo "🔧 Preparing environment..."
-
-            # Ensure Tizen cross compiler is in PATH for buildall.sh ONLY
             export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-
+          
             #############################################################
-            # FIX 1: Build VLC extras/tools using HOST system GCC
-            # BUT force compatibility with old VLC toolchain (C++03)
+            # Step 1 — Clone VLC source used by VLC-Tizen
             #############################################################
-            echo "🔧 Prebuilding VLC tools (native GCC, C++03)..."
-            
-            # -------------------------------------------------------
-            # 1) Clone VLC if missing
-            # -------------------------------------------------------
+            echo "🔧 Cloning upstream VLC core..."
             if [[ ! -d vlc ]]; then
               git clone https://code.videolan.org/videolan/vlc.git vlc
               pushd vlc
               git checkout 4e0fa1b
               popd
             fi
-            
-            # -------------------------------------------------------
-            # 2) Ensure toolchain permissions
-            # -------------------------------------------------------
-            echo "🔧 Making toolchain executable..."
+          
+            #############################################################
+            # Step 2 — Build extras/tools with HOST compiler
+            #############################################################
+            echo "🔧 Bootstrapping VLC extras/tools..."
+          
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
-            
-            # -------------------------------------------------------
-            # 3) Build extras/tools with HOST GCC
-            # -------------------------------------------------------
+          
             pushd vlc/extras/tools
             export CC=gcc
             export CXX=g++
@@ -238,80 +229,77 @@ jobs:
             export CXXFLAGS="-std=gnu++03 -Wno-deprecated-declarations"
             export LDFLAGS=""
             export CPPFLAGS=""
-            
-            echo "🔧 Bootstrapping extras/tools..."
+          
             ./bootstrap
-            
-            # If bootstrap regenerated contrib files, patch AFTER this
             popd
-            echo "📂 DEBUG: Listing VLC extras/tools tree..."
-            find vlc/extras -maxdepth 5 -type f | sort || true
+          
+            #############################################################
+            # Step 3 — Generate contrib tree so rules.mak exists
+            #############################################################
+            echo "🔧 Generating contrib sources..."
+            pushd vlc/extras/tools
+            make list || true
+            make fetch || true
+            make -j"$(nproc)" || true
+            popd
+          
+            echo "📂 DEBUG: Listing contrib files..."
+            find vlc/extras/contrib -maxdepth 6 -type f | sort || true
             echo "📂 DEBUG END"
-
-            echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)…"
-            
-            RULES="vlc/extras/tools/contrib/src/ffmpeg/rules.mak.in"
-            FREETYPE_RULES="vlc/contrib/src/freetype2/rules.mak"
-            
+          
+            #############################################################
+            # Step 4 — Auto-detect rules files
+            #############################################################
+            RULES=$(find vlc/extras/contrib/src -type f -name "rules.mak*" | grep ffmpeg | head -n1)
+            FREETYPE_RULES=$(find vlc/extras/contrib/src -type f -name "rules.mak*" | grep freetype | head -n1)
+          
+            echo "🔧 Using FFmpeg rules: $RULES"
+            echo "🔧 Using Freetype rules: $FREETYPE_RULES"
+          
+            #############################################################
+            # Step 5 — Patch FFmpeg + Freetype sources
+            #############################################################
             FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
-            
-            # Ensure contrib directories exist
+          
             mkdir -p vlc/contrib/tarballs/
-            
-            # -------------------------------------------------------
-            # 🔥 FIX FAILED FFMPEG GIT CLONE — *FINAL WORKING VERSION*
-            # -------------------------------------------------------
-            
-            # Force contrib rules to be fully generated BEFORE patching
-            pushd vlc/extras/tools
-            popd
-            
-            # Correct replacement command for ffmpeg-HEAD rule
+          
             NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
-            
-            # Replace broken git clone rule
+          
             sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
-            
-            # -------------------------------------------------------
-            # 🔥 FIX DEAD FREETYPE MIRROR
-            # -------------------------------------------------------
             sed -i "s#http://.*freetype.*2\.6\.1.*#$FREETYPE_URL#g" "$FREETYPE_RULES"
-            
+          
             echo "🔧 FFmpeg + freetype patches applied successfully."
-
-
-            # -------------------------------------------------------
-            # 5) Now build tools (full compile after patch)
-            # -------------------------------------------------------
+          
+            #############################################################
+            # Step 6 — Rebuild tools after patch
+            #############################################################
             pushd vlc/extras/tools
             make -j"$(nproc)"
             popd
+          
             #############################################################
-            # FIX 2: Now run *VLC real build* which uses Tizen cross GCC
+            # Step 7 — Build Tizen VLC using cross toolchain
             #############################################################
             echo "🔨 Building VLC (tizen)..."
-
+          
             export TARGET_CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
             export TARGET_CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-
+          
             ./buildall.sh -a armv7l
-
+          
             echo "📦 Packaging VLC WGT..."
             expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
-
             cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
-
-          ###################################################
-          #               ALL OTHER WEB PROJECTS
-          ###################################################
+          
           else
+            ###################################################
+            # ALL OTHER WEB PROJECTS
+            ###################################################
             echo "🌐 Standard web build for $repo_name..."
-
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$TIZEN_PATH/tools/ide/bin/tizen" package -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
           fi
-
       # ---------------------------------------------------
       # Upload WGTS from this repo build
       # ---------------------------------------------------
