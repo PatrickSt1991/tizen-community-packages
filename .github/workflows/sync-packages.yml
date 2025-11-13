@@ -215,56 +215,38 @@ jobs:
             fi
 
             #############################################################
-            # DEBUG — Locate and Inspect REAL ffmpeg rules file
+            # REAL location — patch contrib rules (NOT extras/tools)
             #############################################################
-            
-            echo "🔍 DEBUG: Searching for ffmpeg rules files..."
-            find vlc/extras/tools -type f -path "*/contrib/src/ffmpeg/*" | sort || true
-            
-            FFMPEG_RULES=$(find vlc/extras/tools -type f -path "*/contrib/src/ffmpeg/rules.mak" | head -n1)
-            
-            echo "🔍 DEBUG: Found FFmpeg rules file: $FFMPEG_RULES"
-            
-            if [[ -f "$FFMPEG_RULES" ]]; then
-                echo "🔍 DEBUG: Showing first 200 lines:"
-                head -n 200 "$FFMPEG_RULES"
-            
-                echo "🔍 DEBUG: Showing lines 150–250 around line 176:"
-                sed -n '150,250p' "$FFMPEG_RULES"
-            else
-                echo "❌ ERROR: No ffmpeg rules.mak file found in extras/tools!"
-            fi
-            
-            echo "🔍 DEBUG END"
-            
-            #############################################################
-            # Step 2 — Patch REAL contrib ffmpeg + freetype rules
-            #############################################################
-            echo "🔧 Patching VLC contrib ffmpeg + freetype rules…"
+            echo "🔧 Patching REAL VLC contrib ffmpeg + freetype rules…"
             
             FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
             
-            # REAL location used by extras/tools
-            FFMPEG_RULES=$(find vlc/extras/tools -type f -path "*/contrib/src/ffmpeg/rules.mak" | head -n1)
-            FREETYPE_RULES=$(find vlc/extras/tools -type f -path "*/contrib/src/freetype2/rules.mak" | head -n1)
+            # autodetect correct files
+            FFMPEG_RULES=$(find vlc/contrib/src/ffmpeg -type f -name "rules.mak*" | head -n1)
+            FREETYPE_RULES=$(find vlc/contrib/src/freetype2 -type f -name "rules.mak*" | head -n1)
             
-            echo "🔧 Using FFmpeg rules file: $FFMPEG_RULES"
-            echo "🔧 Using Freetype rules file: $FREETYPE_RULES"
+            echo "🔧 FFmpeg rules file: $FFMPEG_RULES"
+            echo "🔧 Freetype rules file: $FREETYPE_RULES"
             
-            # Replace ANY git clone of ffmpeg-HEAD
+            if [[ ! -f "$FFMPEG_RULES" ]]; then
+              echo "❌ ERROR: ffmpeg rules file not found under vlc/contrib/src/ffmpeg"
+              exit 1
+            fi
+            
+            # Patch the broken ffmpeg-HEAD git clone
             sed -i -E "s#git clone[^\n]*ffmpeg-HEAD#TEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; \
             rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; \
             curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; \
             ( cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD ) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; \
             rm -Rf \$\$TEMP_DIR#g" "$FFMPEG_RULES"
             
-            # Fix freetype URL
+            # Patch freetype rules
             if [[ -f "$FREETYPE_RULES" ]]; then
-                sed -i "s#http://.*freetype.*2\.6\.1.*#$FREETYPE_URL#g" "$FREETYPE_RULES"
+              sed -i "s#http://.*freetype.*2\.6\.1.*#$FREETYPE_URL#g" "$FREETYPE_RULES"
             fi
             
-            echo "🔧 FFmpeg + freetype patches applied successfully."
+            echo "✅ REAL VLC contrib patches applied."
 
             #############################################################
             # Step 3 — Build extras/tools with HOST compiler
