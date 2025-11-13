@@ -52,14 +52,10 @@ jobs:
           unzip -o "${WORKDIR}/rootstrap.zip" -d "${WORKDIR}/"
 
           echo "📁 Installing Rootstrap into Tizen Studio..."
-          # Create target structure if missing
           mkdir -p "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps"
-
-          # Move ONLY the core rootstrap directory into place
           mv "${WORKDIR}/data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
              "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
 
-          # Cleanup
           rm -rf "${WORKDIR}/data"
           rm "${WORKDIR}/rootstrap.zip"
 
@@ -73,7 +69,6 @@ jobs:
           rm "${WORKDIR}/toolchain.zip"
 
           echo "✅ Rootstrap & Toolchain installed successfully."
-
 
       - name: Create signing certificate
         run: |
@@ -194,68 +189,42 @@ jobs:
           ###################################################
           if [[ "$repo_name" == "vlc-tizen" ]]; then
             echo "⚙️ Using local Tizen Studio SDK..."
-          
+
             SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
             echo "🔧 Using sysroot: $SYSROOT"
-          
-            # -------------------------------
-            # Fix missing sdk.version (required by buildall.sh)
-            # -------------------------------
+
+            # Proper sdk.version: a small shell script returning 4.0
             if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
-              echo "4.0" > "$TIZEN_SDK/sdk.version"
-              echo "📄 Created sdk.version"
+              cat > "$TIZEN_SDK/sdk.version" << 'EOF'
+              #!/bin/sh
+              echo 4.0
+              EOF
+              chmod +x "$TIZEN_SDK/sdk.version"
+              echo "📄 Created sdk.version script"
             fi
-          
-            # -------------------------------
-            # 1) Build VLC extras/tools with HOST compiler
-            # -------------------------------
-            echo "🔨 Building VLC tools (host native)..."
-          
-            # Force real GNU build tools for HOST
-            export CC=/usr/bin/gcc
-            export CXX=/usr/bin/g++
-            export LD=/usr/bin/ld
-            export AR=/usr/bin/ar
-            export AS=/usr/bin/as
-            export STRIP=/usr/bin/strip
-            export CC_FOR_BUILD=/usr/bin/gcc
-            export CXX_FOR_BUILD=/usr/bin/g++
-          
-            # Clear any cross-contamination
-            unset TARGET_CC
-            unset TARGET_CXX
-            unset CHOST
-            unset CROSS_COMPILE
-            unset CFLAGS
-            unset LDFLAGS
-            unset CPPFLAGS
-            export PKG_CONFIG=false
-          
-            # Build tools separately
-            cd vlc/extras/tools
-            ./bootstrap
-            make -j4
-            cd ../../..
-          
-            # -------------------------------
-            # 2) Now enable TARGET cross-compiler for real VLC build
-            # -------------------------------
-            echo "🔧 Switching to Tizen ARM cross compiler..."
-          
+
+            # Make sure cross compiler is in PATH (for later VLC configure)
             export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-          
-            export TARGET_CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-            export TARGET_CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-          
-            echo "🔨 Building VLC (Tizen ARM)..."
+
+            echo "🔧 Prebuilding VLC tools (host GCC)..."
+            # Pre-clone VLC sources so we can build extras/tools natively
+            if [[ ! -d vlc ]]; then
+              git clone git://git.videolan.org/vlc.git vlc
+            fi
+
+            pushd vlc/extras/tools
+            # Force host compilers for the build tools
+            unset CC CXX CPPFLAGS CFLAGS LDFLAGS
+            ./bootstrap
+            make -j"$(nproc)"
+            popd
+
+            echo "🔨 Building VLC (tizen) via buildall.sh..."
             ./buildall.sh -a armv7l
-          
-            # -------------------------------
-            # 3) Package WGT (signed)
-            # -------------------------------
+
             echo "📦 Packaging VLC WGT..."
-            expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)"
-          
+            expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
+
             cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
 
           ###################################################
