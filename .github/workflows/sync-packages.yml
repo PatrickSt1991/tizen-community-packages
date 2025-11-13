@@ -257,22 +257,30 @@ jobs:
             mkdir -p vlc/contrib/tarballs/
             
             # -------------------------------------------------------
+            # <--- MODIFIED SECTION START
+            #
             # 🔥 FIX FAILED FFMPEG GIT CLONE
-            # -------------------------------------------------------
+            # The original rules.mak file contains a long, single-line
+            # command to git clone from the dead git.libav.org.
+            # We replace that entire line with a new command to download
+            # a stable ffmpeg release tarball, extract it, and repackage
+            # it as the .tar.xz file the build system expects.
             
             # This is the new, working command for the Makefile rule.
             # Note: It must be indented with a TAB for the Makefile.
             NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
             
-            # Use sed to find the line containing the broken 'git clone' 
-            # command and replace it entirely with our new curl-based command.
-            # <--- THIS IS THE MODIFIED LINE
-            sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD && git clone/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
+            # Use sed to find the line containing 'git.libav.org' and
+            # replace it entirely with our new command.
+            sed -i "/git\.libav\.org/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
             
             # 🔥 FIX DEAD FREETYPE MIRROR
             sed -i '
                 s#http://.*freetype.*2\.6\.1.*#'"$FREETYPE_URL"'#g
             ' "$FREETYPE_RULES"
+            
+            # <--- MODIFIED SECTION END
+            # -------------------------------------------------------
             
             echo "🔧 FFmpeg + freetype patches applied successfully."
 
@@ -280,16 +288,6 @@ jobs:
             # 5) Now build tools (full compile after patch)
             # -------------------------------------------------------
             pushd vlc/extras/tools
-            
-            # -------------------------------------------------------
-            # 🔥 FIX: Patch dead GNU FTP links for autotools
-            # -------------------------------------------------------
-            echo "🔧 Applying patches for dead GNU FTP links..."
-            TOOLS_MAK="tools.mak"
-            sed -i 's#http://ftp.gnu.org/gnu#https://ftpmirror.gnu.org#g' "$TOOLS_MAK"
-            echo "🔧 Patches applied to $TOOLS_MAK."
-            # -------------------------------------------------------
-
             make -j"$(nproc)"
             popd
             #############################################################
@@ -305,7 +303,7 @@ jobs:
             echo "📦 Packaging VLC WGT..."
             expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
 
-            cp -r ./*.wgt "$GITHUB_WELCOM_WORKSPACE/wgt_files/" 2>/dev/null || true
+            cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
 
           ###################################################
           #               ALL OTHER WEB PROJECTS
@@ -328,7 +326,7 @@ jobs:
           files: "wgt_files/*.wgt"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            
+
   publish-release:
     runs-on: ubuntu-latest
     needs: tizen-build
