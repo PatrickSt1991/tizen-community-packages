@@ -257,33 +257,27 @@ jobs:
             mkdir -p vlc/contrib/tarballs/
             
             # -------------------------------------------------------
-            # <--- MODIFIED SECTION START
-            #
-            # 🔥 FIX FAILED FFMPEG GIT CLONE
-            # The original rules.mak file contains a long, single-line
-            # command to git clone from the dead git.libav.org.
-            # We replace that entire line with a new command to download
-            # a stable ffmpeg release tarball, extract it, and repackage
-            # it as the .tar.xz file the build system expects.
-            
-            # This is the new, working command for the Makefile rule.
-            # Note: It must be indented with a TAB for the Makefile.
-            
-            # 🔥 FIX FAILED FFMPEG GIT CLONE
-            NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
-
-            # Replace the broken git clone rule
-            sed -i "/^rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
-            
-            # 🔥 FIX DEAD FREETYPE MIRROR
-            sed -i '
-                s#http://.*freetype.*2\.6\.1.*#'"$FREETYPE_URL"'#g
-            ' "$FREETYPE_RULES"
-            
-            # <--- MODIFIED SECTION END
+            # 🔥 FIX FAILED FFMPEG GIT CLONE — *FINAL WORKING VERSION*
             # -------------------------------------------------------
             
+            # Force contrib rules to be fully generated BEFORE patching
+            pushd vlc/extras/tools
+            make list || true
+            popd
+            
+            # Correct replacement command for ffmpeg-HEAD rule
+            NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
+            
+            # Replace broken git clone rule
+            sed -i "/^rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
+            
+            # -------------------------------------------------------
+            # 🔥 FIX DEAD FREETYPE MIRROR
+            # -------------------------------------------------------
+            sed -i "s#http://.*freetype.*2\.6\.1.*#$FREETYPE_URL#g" "$FREETYPE_RULES"
+            
             echo "🔧 FFmpeg + freetype patches applied successfully."
+
 
             # -------------------------------------------------------
             # 5) Now build tools (full compile after patch)
