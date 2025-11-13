@@ -97,37 +97,6 @@ jobs:
           } > package.exp
           chmod +x package.exp
 
-      - name: Install compiler shims (global)
-        run: |
-          TOOLCHAIN_BIN_DIR="${GITHUB_WORKSPACE}/tizen-studio/tools/arm-linux-gnueabi-gcc-4.9/bin"
-
-          sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
-          sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
-
-          # gcc shim
-          sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null <<'EOF'
-          #!/usr/bin/env bash
-          for a in "$@"; do
-            case "$a" in
-              --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-gcc-real" "$@" ;;
-            esac
-          done
-          exec gcc "$@"
-          EOF
-          
-                    # g++ shim
-                    sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null <<'EOF'
-          #!/usr/bin/env bash
-          for a in "$@"; do
-            case "$a" in
-              --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-g++-real" "$@" ;;
-            esac
-          done
-          exec g++ "$@"
-          EOF
-
-          sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-
       - name: Upload Tizen Studio artifact
         uses: actions/upload-artifact@v4
         with:
@@ -199,67 +168,56 @@ jobs:
   
           if [[ "$repo_name" == "vlc-tizen" ]]; then
             echo "⚙️ Using local Tizen Studio SDK..."
-  
-            export TIZEN_SDK="${TIZEN_PATH}"
-            export TIZEN_SDK_VERSION="4.0"
-  
+          
             ROOTSTRAP="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-  
-            if [ ! -d "$ROOTSTRAP" ]; then
+          
+            if [[ ! -d "$ROOTSTRAP" ]]; then
               echo "❌ Rootstrap missing at: $ROOTSTRAP"
               ls -R "$TIZEN_PATH/platforms/tizen-4.0"
               exit 1
             fi
-  
+          
             echo "✅ Rootstrap found."
-  
             export SYSROOT="$ROOTSTRAP/usr"
-            export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
-            export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
-            export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
             echo "🔧 Using sysroot: $SYSROOT"
-  
-            TOOLCHAIN_BIN_DIR="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin"
-  
-            echo "🧩 Ensuring compiler shims exist..."
-            if [ ! -f "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real" ]; then
-              sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
-              sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
-            fi
-  
-            # GCC shim
-            echo '#!/usr/bin/env bash' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
-            echo 'for a in "$@"; do case "$a" in --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-gcc-real" "$@";; esac; done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
-            echo 'exec gcc "$@"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
-  
-            # G++ shim
-            echo '#!/usr/bin/env bash' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
-            echo 'for a in "$@"; do case "$a" in --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-g++-real" "$@";; esac; done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
-            echo 'exec g++ "$@"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
-  
-            sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-  
+          
+            # *** HERE IS THE FIX ***
+            # Tell VLC build system which compiler is for target, NOT for tools
+            export CC_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
+            export CXX_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
+            export AR_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-ar"
+            export AS_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-as"
+            export LD_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-ld"
+            export STRIP_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-strip"
+          
+            # Important: force native tools (help2man, ragel, protoc, meson...)
+            export CC="gcc"
+            export CXX="g++"
+          
+            echo "🧩 Native tools compiler: $(which gcc)"
+            echo "🎯 Target compiler: $CC_FOR_TARGET"
+          
+            # VLC expects PATH to contain native tools AND ARM toolchain
+            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+          
             build_script="${{ matrix.build_script }}"
             build_args="${{ matrix.build_args }}"
-  
+          
             if [ -n "$build_script" ] && [ -f "$build_script" ]; then
               chmod +x "$build_script"
-              echo "🚧 Running $build_script $build_args with host compilers..."
-              CC=gcc CXX=g++ AR=ar LD=ld AS=as "./$build_script" $build_args || (
-                echo "❌ Build failed, dumping config.log..."
-                find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
-                exit 1
-              )
+              echo "🚧 Running $build_script $build_args for VLC..."
+              "./$build_script" $build_args
             else
               echo "❌ VLC build script not found!"
               exit 1
             fi
-  
+          
           else
             echo "🌐 Standard web build for $repo_name..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
           fi
+
   
           username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
           appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
