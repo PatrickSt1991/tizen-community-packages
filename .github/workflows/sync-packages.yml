@@ -1,4 +1,130 @@
-tizen-build:
+name: Sync Tizen Community Packages
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+
+env:
+  TIZEN_STUDIO_VER: 4
+  CERT_NAME: CommunityPack
+  CERT_PASSWORD: 1234
+  NODE_OPTIONS: --openssl-legacy-provider
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            wget zip git jq nodejs npm expect curl unzip build-essential \
+            libtool help2man ragel nasm protobuf-compiler meson
+          
+      - name: Download and install Tizen Studio 4.0
+        run: |
+          mkdir -p tizen-studio
+          curl -L -o tizen-installer "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
+          chmod +x tizen-installer
+          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
+          rm ./tizen-installer
+          chmod -R +x tizen-studio/tools/ide/bin
+
+      - name: Install Tizen 4.0 Rootstrap and Toolchain
+        run: |
+          set -e
+          echo "Downloading missing Tizen 4.0 components..."
+          BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
+          WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
+
+          echo "📦 Downloading Rootstrap..."
+          ROOTSTRAP_ZIP="mobile-4.0-rs-device.core_0.0.47_ubuntu-64.zip"
+          curl -L -o "${WORKDIR}/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
+
+          echo "📂 Extracting Rootstrap..."
+          unzip -o "${WORKDIR}/rootstrap.zip" -d "${WORKDIR}/"
+
+          echo "📁 Installing Rootstrap into Tizen Studio..."
+          mkdir -p "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps"
+          mv "${WORKDIR}/data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
+             "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+
+          rm -rf "${WORKDIR}/data"
+          rm "${WORKDIR}/rootstrap.zip"
+
+          echo "📦 Downloading Toolchain..."
+          TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
+          curl -L -o "${WORKDIR}/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
+
+          unzip -o "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/"
+          mv "${WORKDIR}/data/tools/arm-linux-gnueabi-gcc-4.9" "${WORKDIR}/tools/"
+          rm -rf "${WORKDIR}/data"
+          rm "${WORKDIR}/toolchain.zip"
+
+          echo "✅ Rootstrap & Toolchain installed successfully."
+
+      - name: Create signing certificate
+        run: |
+          mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
+          ./tizen-studio/tools/ide/bin/tizen certificate -a "$CERT_NAME" -p "$CERT_PASSWORD" \
+            -c NL -s Community -ct World -o "$CERT_NAME" -n "$CERT_NAME" -e community@example.org -f "$CERT_NAME"
+          ./tizen-studio/tools/ide/bin/tizen security-profiles add -n "$CERT_NAME" \
+            -a "./tizen-studio-data/keystore/author/${CERT_NAME}.p12" -p "$CERT_PASSWORD"
+          ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
+
+      - name: Create expect script for signing
+        run: |
+          {
+            echo '#!/usr/bin/expect -f'
+            echo 'set timeout 300'
+            echo 'set build_dir [lindex $argv 0]'
+            echo 'spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir'
+            echo 'expect {'
+            echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }'
+            echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }'
+            echo '  eof'
+            echo '}'
+          } > package.exp
+          chmod +x package.exp
+
+      - name: Upload Tizen Studio artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tizen-studio-artifact
+          path: tizen-studio/
+          retention-days: 1
+
+      - name: Upload expect script artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-exp-artifact
+          path: package.exp
+          retention-days: 1
+
+  generate-matrix-build:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          matrix=$(jq -c '{include: [to_entries[] | {
+            repo: .key,
+            branch: .value.branch,
+            build_script: (.value.build_script // ""),
+            build_args: (.value.build_args // "")
+          }]}' repos-build.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  tizen-build:
     runs-on: ubuntu-latest
     needs:
       - prepare
@@ -44,8 +170,8 @@ tizen-build:
       - name: Clone and build project
         shell: bash
         env:
-          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
-          TIZEN_PATH: ${{ github.workspace }}/tizen-studio
+          TIZEN_SDK: ${{ github.workspace }/tizen-studio
+          TIZEN_PATH: ${{ github.workspace }/tizen-studio
         run: |
           set -e
 
@@ -200,5 +326,26 @@ tizen-build:
           tag_name: "community-${{ github.run_number }}"
           name: "Community Packages ${{ github.run_number }}"
           files: "wgt_files/*.wgt"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: tizen-build
+    steps:
+      - name: Download all WGT artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-wgts
+
+      - name: List downloaded files
+        run: ls -R release-wgts || echo "No WGT files found"
+
+      - name: Create GitHub Release with all WGTS
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "community-${{ github.run_number }}"
+          name: "Community Packages ${{ github.run_number }}"
+          files: "release-wgts/**/*.wgt"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
