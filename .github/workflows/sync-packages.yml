@@ -216,11 +216,22 @@ jobs:
               pushd vlc
               git checkout 4e0fa1b
               popd
-
+              
               echo "🔧 Patching VLC contribs to avoid dead libav server..."
-              sed -i 's#git://git.libav.org/libav.git#https://github.com/videolan/ffmpeg.git#g' \
-                vlc/contrib/src/ffmpeg/rules.mak
-              sed -i 's#HEAD#n4.4#g' vlc/contrib/src/ffmpeg/rules.mak
+              
+              # FIX 1: restore executable flags on toolchain
+              chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+              chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
+              
+              # FIX 2: override FFmpeg contrib with tarball instead of git clone
+              echo "🔧 Overriding FFmpeg contrib to use ffmpeg-4.4 tarball"
+              FF_URL="https://www.ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+              
+              sed -i 's#GITURL :=.*#FFMPEGURL := '"$FF_URL"'#' vlc/contrib/src/ffmpeg/rules.mak
+              sed -i 's#GITVERSION :=.*#FFMPEG_VERSION := 4.4#' vlc/contrib/src/ffmpeg/rules.mak
+              sed -i 's#\$(GIT) clone.*#curl -L $(FFMPEGURL) -o ffmpeg.tar.xz#g' vlc/contrib/src/ffmpeg/rules.mak
+              sed -i 's#cd ffmpeg-HEAD.*#tar xf ffmpeg.tar.xz -C ../../contrib/tarballs#g' vlc/contrib/src/ffmpeg/rules.mak
+              sed -i 's#rm -Rf ffmpeg-HEAD.*#rm -f ffmpeg.tar.xz#g' vlc/contrib/src/ffmpeg/rules.mak
             fi
 
             pushd vlc/extras/tools
