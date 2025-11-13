@@ -170,8 +170,8 @@ jobs:
       - name: Clone and build project
         shell: bash
         env:
-          TIZEN_SDK: ${{ github.workspace }/tizen-studio
-          TIZEN_PATH: ${{ github.workspace }/tizen-studio
+          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
+          TIZEN_PATH: ${{ github.workspace }}/tizen-studio
         run: |
           set -e
 
