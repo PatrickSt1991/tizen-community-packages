@@ -181,38 +181,38 @@ jobs:
 
             echo "🧩 Creating compiler shims..."
             cat <<'EOF' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
-#!/usr/bin/env bash
-args=()
-has_sysroot=0
-for a in "$@"; do
-  case "$a" in
-    --sysroot=*) has_sysroot=1 ;;
-  esac
-  args+=("$a")
-done
-if [ $has_sysroot -eq 0 ]; then
-  exec gcc "${args[@]}"
-else
-  exec "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real" "${args[@]}"
-fi
-EOF
+            #!/usr/bin/env bash
+            args=()
+            has_sysroot=0
+            for a in "$@"; do
+              case "$a" in
+                --sysroot=*) has_sysroot=1 ;;
+              esac
+              args+=("$a")
+            done
+            if [ $has_sysroot -eq 0 ]; then
+              exec gcc "${args[@]}"
+            else
+              exec "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real" "${args[@]}"
+            fi
+            EOF
 
             cat <<'EOF' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
-#!/usr/bin/env bash
-args=()
-has_sysroot=0
-for a in "$@"; do
-  case "$a" in
-    --sysroot=*) has_sysroot=1 ;;
-  esac
-  args+=("$a")
-done
-if [ $has_sysroot -eq 0 ]; then
-  exec g++ "${args[@]}"
-else
-  exec "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real" "${args[@]}"
-fi
-EOF
+            #!/usr/bin/env bash
+            args=()
+            has_sysroot=0
+            for a in "$@"; do
+              case "$a" in
+                --sysroot=*) has_sysroot=1 ;;
+              esac
+              args+=("$a")
+            done
+            if [ $has_sysroot -eq 0 ]; then
+              exec g++ "${args[@]}"
+            else
+              exec "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real" "${args[@]}"
+            fi
+            EOF
 
             sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
 
