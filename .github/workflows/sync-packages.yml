@@ -212,23 +212,23 @@ jobs:
             echo "🔧 Prebuilding VLC tools (native GCC, C++03)..."
 
             if [[ ! -d vlc ]]; then
-              git clone --depth=1 https://code.videolan.org/videolan/vlc.git vlc
+              git clone https://code.videolan.org/videolan/vlc.git vlc
+              pushd vlc
+              git checkout 4e0fa1b
+              popd
             fi
 
             pushd vlc/extras/tools
-
-            # Force OLD LANGUAGE MODE (protobuf + libtool require it)
             export CC=gcc
             export CXX=g++
             export CFLAGS="-std=gnu11"
             export CXXFLAGS="-std=gnu++03 -Wno-deprecated-declarations"
             export LDFLAGS=""
             export CPPFLAGS=""
-
             ./bootstrap
             make -j"$(nproc)"
-
             popd
+
 
             #############################################################
             # FIX 2: Now run *VLC real build* which uses Tizen cross GCC
