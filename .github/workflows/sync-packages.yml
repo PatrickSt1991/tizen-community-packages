@@ -254,43 +254,33 @@ jobs:
             FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
             
             # Ensure contrib directories exist
-            mkdir -p vlc/contrib/tarballs/ffmpeg-HEAD
+            mkdir -p vlc/contrib/tarballs/
             
-            ############################################################
-            # 🔥 KILL *ALL* LIBAV/FFMPEG GIT CLONE LOGIC
-            ############################################################
+            # -------------------------------------------------------
+            # <--- MODIFIED SECTION START
+            #
+            # 🔥 FIX FAILED FFMPEG GIT CLONE
+            # The original rules.mak file contains a long, single-line
+            # command to git clone from the dead git.libav.org.
+            # We replace that entire line with a new command to download
+            # a stable ffmpeg release tarball, extract it, and repackage
+            # it as the .tar.xz file the build system expects.
             
-            # Replace `git clone git://git.libav.org/libav.git` and variants
-            sed -i '
-                s#git clone[^\n]*libav\.org[^\n]*#rm -Rf ../../contrib/tarballs/ffmpeg-HEAD \&\& curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g
-            ' "$RULES"
+            # This is the new, working command for the Makefile rule.
+            # Note: It must be indented with a TAB for the Makefile.
+            NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
             
-            # Replace "rm -Rf ffmpeg-HEAD && git clone ..."
-            sed -i '
-                s#rm -Rf[^\n]*ffmpeg-HEAD[^\n]*git clone[^\n]*#rm -Rf ../../contrib/tarballs/ffmpeg-HEAD \&\& curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g
-            ' "$RULES"
+            # Use sed to find the line containing 'git.libav.org' and
+            # replace it entirely with our new command.
+            sed -i "/git\.libav\.org/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
             
-            # Replace ANY other ffmpeg git clones
-            sed -i '
-                s#git clone[^\n]*ffmpeg[^\n]*#curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g
-            ' "$RULES"
-            
-            # Replace cd ffmpeg-HEAD...git checkout patterns
-            sed -i '
-                s#cd ffmpeg-HEAD[^\n]*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g
-            ' "$RULES"
-            
-            # Replace cleanup/remove blocks
-            sed -i '
-                s#rm -Rf ffmpeg-HEAD[^\n]*#rm -f ffmpeg.tar.xz#g
-            ' "$RULES"
-            
-            ############################################################
             # 🔥 FIX DEAD FREETYPE MIRROR
-            ############################################################
             sed -i '
                 s#http://.*freetype.*2\.6\.1.*#'"$FREETYPE_URL"'#g
             ' "$FREETYPE_RULES"
+            
+            # <--- MODIFIED SECTION END
+            # -------------------------------------------------------
             
             echo "🔧 FFmpeg + freetype patches applied successfully."
 
@@ -316,7 +306,7 @@ jobs:
             cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
 
           ###################################################
-          #            ALL OTHER WEB PROJECTS
+          #               ALL OTHER WEB PROJECTS
           ###################################################
           else
             echo "🌐 Standard web build for $repo_name..."
