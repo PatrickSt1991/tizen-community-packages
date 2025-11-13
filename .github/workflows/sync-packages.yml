@@ -245,21 +245,52 @@ jobs:
             # If bootstrap regenerated contrib files, patch AFTER this
             popd
             
-            echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)..."
+            echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)…"
             
             RULES="vlc/contrib/src/ffmpeg/rules.mak"
             FREETYPE_RULES="vlc/contrib/src/freetype2/rules.mak"
             
-            FFMPEG_URL="https://www.ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+            FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
             
+            # Ensure contrib directories exist
             mkdir -p vlc/contrib/tarballs/ffmpeg-HEAD
             
-            # Matches ANY git clone involving ffmpeg (HEAD, tarballs, etc.)
-            sed -i '/git clone .*ffmpeg/s#.*#rm -Rf ../../contrib/tarballs/ffmpeg-HEAD \&\& curl -L "'"$FFMPEG_URL"'" -o ffmpeg.tar.xz \&\& mkdir -p ../../contrib/tarballs/ffmpeg-HEAD \&\& tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD \&\& rm -f ffmpeg.tar.xz#' "$RULES"
+            ############################################################
+            # 🔥 KILL *ALL* LIBAV/FFMPEG GIT CLONE LOGIC
+            ############################################################
             
-            # Matches ANY freetype URL used by VLC bootstrap
-            sed -i 's#curl -f -L -- "http://.*freetype.*"#curl -f -L -- "'"$FREETYPE_URL"'"#' "$FREETYPE_RULES"
+            # Replace `git clone git://git.libav.org/libav.git` and variants
+            sed -i '
+                s#git clone[^\n]*libav\.org[^\n]*#rm -Rf ../../contrib/tarballs/ffmpeg-HEAD \&\& curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g
+            ' "$RULES"
+            
+            # Replace "rm -Rf ffmpeg-HEAD && git clone ..."
+            sed -i '
+                s#rm -Rf[^\n]*ffmpeg-HEAD[^\n]*git clone[^\n]*#rm -Rf ../../contrib/tarballs/ffmpeg-HEAD \&\& curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g
+            ' "$RULES"
+            
+            # Replace ANY other ffmpeg git clones
+            sed -i '
+                s#git clone[^\n]*ffmpeg[^\n]*#curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g
+            ' "$RULES"
+            
+            # Replace cd ffmpeg-HEAD...git checkout patterns
+            sed -i '
+                s#cd ffmpeg-HEAD[^\n]*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g
+            ' "$RULES"
+            
+            # Replace cleanup/remove blocks
+            sed -i '
+                s#rm -Rf ffmpeg-HEAD[^\n]*#rm -f ffmpeg.tar.xz#g
+            ' "$RULES"
+            
+            ############################################################
+            # 🔥 FIX DEAD FREETYPE MIRROR
+            ############################################################
+            sed -i '
+                s#http://.*freetype.*2\.6\.1.*#'"$FREETYPE_URL"'#g
+            ' "$FREETYPE_RULES"
             
             echo "🔧 FFmpeg + freetype patches applied successfully."
 
