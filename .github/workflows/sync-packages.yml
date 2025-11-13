@@ -272,7 +272,7 @@ jobs:
             
             # Use sed to find the line containing 'git.libav.org' and
             # replace it entirely with our new command.
-            sed -i "/git\.libav\.org/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
+            sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD && git clone/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
             
             # 🔥 FIX DEAD FREETYPE MIRROR
             sed -i '
