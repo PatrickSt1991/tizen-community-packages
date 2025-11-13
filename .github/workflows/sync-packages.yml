@@ -211,6 +211,9 @@ jobs:
             #############################################################
             echo "🔧 Prebuilding VLC tools (native GCC, C++03)..."
             
+            # -------------------------------------------------------
+            # 1) Clone VLC if missing
+            # -------------------------------------------------------
             if [[ ! -d vlc ]]; then
               git clone https://code.videolan.org/videolan/vlc.git vlc
               pushd vlc
@@ -218,44 +221,16 @@ jobs:
               popd
             fi
             
+            # -------------------------------------------------------
+            # 2) Ensure toolchain permissions
+            # -------------------------------------------------------
             echo "🔧 Making toolchain executable..."
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
             
-            ############################################################
-            # 🔥 FIX 1 — Replace ALL libav/ffmpeg git clone logic
-            ############################################################
-            FFMPEG_URL="https://www.ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
-            
-            mkdir -p vlc/contrib/tarballs/ffmpeg-HEAD
-            
-            RULES=vlc/contrib/src/ffmpeg/rules.mak
-            
-            # Kill git clone lines entirely
-            sed -i 's#^\s*$(GIT).*#curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g' $RULES
-            
-            # Replace "git clone" fallback paths
-            sed -i 's#git clone.*#curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g' $RULES
-            
-            # Replace "git checkout" section
-            sed -i 's#cd ffmpeg-HEAD.*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g' $RULES
-            
-            # Replace cleanup
-            sed -i 's#rm -Rf ffmpeg-HEAD.*#rm -f ffmpeg.tar.xz#g' $RULES
-            
-            ############################################################
-            # 🔥 FIX 2 — freetype2 SourceForge mirror is dead
-            ############################################################
-            echo "🔧 Patching freetype2 contrib to use working mirror"
-            
-            FREETYPE_RULES=vlc/contrib/src/freetype2/rules.mak
-            FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
-            
-            sed -i 's#http://heanet.dl.sourceforge.net/sourceforge/freetype/freetype2/2.6.1/freetype-2.6.1.tar.gz#'"$FREETYPE_URL"'#' "$FREETYPE_RULES"
-            
-            ############################################################
-            # Build VLC tools
-            ############################################################
+            # -------------------------------------------------------
+            # 3) Build extras/tools with HOST GCC
+            # -------------------------------------------------------
             pushd vlc/extras/tools
             export CC=gcc
             export CXX=g++
@@ -263,10 +238,62 @@ jobs:
             export CXXFLAGS="-std=gnu++03 -Wno-deprecated-declarations"
             export LDFLAGS=""
             export CPPFLAGS=""
+            
+            echo "🔧 Bootstrapping extras/tools..."
             ./bootstrap
+            
+            # If bootstrap regenerated contrib files, patch AFTER this
+            popd
+            
+            #######################################################################
+            # 🔥 FIX — REMOVE ALL LIBAV/FFMPEG GIT LOGIC AND USE TARBALL INSTEAD
+            #######################################################################
+            echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)..."
+            
+            RULES="vlc/contrib/src/ffmpeg/rules.mak"
+            FFMPEG_URL="https://www.ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+            
+            # Ensure contrib tarball directory exists
+            mkdir -p vlc/contrib/tarballs/ffmpeg-HEAD
+            
+            # --------------------------------------------------------------
+            # 1. Replace ALL libav / git clone patterns with a curl download
+            # --------------------------------------------------------------
+            sed -i 's#git://git.libav.org/libav.git#'"$FFMPEG_URL"'#g' "$RULES"
+            
+            # Any line starting with $(GIT) clone or git clone → curl download
+            sed -i 's#^\s*\$(GIT) clone.*#curl -L "'"$FFMPEG_URL"'" -o ffmpeg.tar.xz#g' "$RULES"
+            sed -i 's#^\s*git clone.*#curl -L "'"$FFMPEG_URL"'" -o ffmpeg.tar.xz#g' "$RULES"
+            
+            # The "rm -Rf ffmpeg-HEAD && git clone" combined line → also replace
+            sed -i 's#rm -Rf .*ffmpeg-HEAD.*#rm -Rf ../../contrib/tarballs/ffmpeg-HEAD && curl -L "'"$FFMPEG_URL"'" -o ffmpeg.tar.xz#g' "$RULES"
+            
+            # --------------------------------------------------------------
+            # 2. Replace "cd ffmpeg-HEAD && git checkout" with tar extract
+            # --------------------------------------------------------------
+            sed -i 's#cd ffmpeg-HEAD.*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g' "$RULES"
+            
+            # --------------------------------------------------------------
+            # 3. Replace cleanup section
+            # --------------------------------------------------------------
+            sed -i 's#rm -Rf ffmpeg-HEAD.*#rm -f ffmpeg.tar.xz#g' "$RULES"
+            
+            # --------------------------------------------------------------
+            # freetype2 SourceForge dead → replace with working mirror
+            # --------------------------------------------------------------
+            FREETYPE_RULES="vlc/contrib/src/freetype2/rules.mak"
+            FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
+            
+            sed -i 's#http://heanet.dl.sourceforge.net/sourceforge/freetype/freetype2/2.6.1/freetype-2.6.1.tar.gz#'"$FREETYPE_URL"'#' "$FREETYPE_RULES"
+            
+            echo "🔧 FFmpeg + freetype patches applied successfully."
+            
+            # -------------------------------------------------------
+            # 5) Now build tools (full compile after patch)
+            # -------------------------------------------------------
+            pushd vlc/extras/tools
             make -j"$(nproc)"
             popd
-
             #############################################################
             # FIX 2: Now run *VLC real build* which uses Tizen cross GCC
             #############################################################
