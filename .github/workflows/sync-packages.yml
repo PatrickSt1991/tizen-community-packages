@@ -193,30 +193,51 @@ jobs:
             SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
             echo "🔧 Using sysroot: $SYSROOT"
 
-            # Proper sdk.version: safe YAML-proof version
+            # Proper sdk.version (some scripts source this file!)
             if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
               printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
               chmod +x "$TIZEN_SDK/sdk.version"
               echo "📄 Created sdk.version script"
             fi
 
-            # Make sure cross compiler is in PATH (for later VLC configure)
+            echo "🔧 Preparing environment..."
+
+            # Ensure Tizen cross compiler is in PATH for buildall.sh ONLY
             export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
 
-            echo "🔧 Prebuilding VLC tools (host GCC)..."
-            # Pre-clone VLC sources so we can build extras/tools natively
+            #############################################################
+            # FIX 1: Build VLC extras/tools using HOST system GCC
+            # BUT force compatibility with old VLC toolchain (C++03)
+            #############################################################
+            echo "🔧 Prebuilding VLC tools (native GCC, C++03)..."
+
             if [[ ! -d vlc ]]; then
-              git clone git://git.videolan.org/vlc.git vlc
+              git clone --depth=1 https://code.videolan.org/videolan/vlc.git vlc
             fi
 
             pushd vlc/extras/tools
-            # Force host compilers for the build tools
-            unset CC CXX CPPFLAGS CFLAGS LDFLAGS
+
+            # Force OLD LANGUAGE MODE (protobuf + libtool require it)
+            export CC=gcc
+            export CXX=g++
+            export CFLAGS="-std=gnu11"
+            export CXXFLAGS="-std=gnu++03 -Wno-deprecated-declarations"
+            export LDFLAGS=""
+            export CPPFLAGS=""
+
             ./bootstrap
             make -j"$(nproc)"
+
             popd
 
-            echo "🔨 Building VLC (tizen) via buildall.sh..."
+            #############################################################
+            # FIX 2: Now run *VLC real build* which uses Tizen cross GCC
+            #############################################################
+            echo "🔨 Building VLC (tizen)..."
+
+            export TARGET_CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+            export TARGET_CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+
             ./buildall.sh -a armv7l
 
             echo "📦 Packaging VLC WGT..."
