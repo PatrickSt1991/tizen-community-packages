@@ -218,37 +218,43 @@ jobs:
               popd
             fi
             
-            echo "🔧 Making Tizen cross-compiler executable..."
+            echo "🔧 Making toolchain executable..."
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
             chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
             
             ############################################################
-            # 🔥 REAL fix: libav server is dead → replace with FFmpeg
+            # 🔥 FIX 1 — Replace ALL libav/ffmpeg git clone logic
             ############################################################
-            echo "🔧 Replacing libav dead server with FFmpeg 4.4 tarball..."
-            
-            FF_URL="https://www.ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+            FFMPEG_URL="https://www.ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             
             mkdir -p vlc/contrib/tarballs/ffmpeg-HEAD
             
-            # 1. Replace the git://libav URL
-            sed -i 's#git://git\.libav\.org/libav\.git#'"$FF_URL"'#' \
-              vlc/contrib/src/ffmpeg/rules.mak
+            RULES=vlc/contrib/src/ffmpeg/rules.mak
             
-            # 2. Replace git clone with curl download
-            sed -i 's#$(GIT) clone.*#curl -L '"$FF_URL"' -o ffmpeg.tar.xz#g' \
-              vlc/contrib/src/ffmpeg/rules.mak
+            # Kill git clone lines entirely
+            sed -i 's#^\s*$(GIT).*#curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g' $RULES
             
-            # 3. Replace checkout step with tar extraction
-            sed -i 's#cd ffmpeg-HEAD.*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g' \
-              vlc/contrib/src/ffmpeg/rules.mak
+            # Replace "git clone" fallback paths
+            sed -i 's#git clone.*#curl -L '"$FFMPEG_URL"' -o ffmpeg.tar.xz#g' $RULES
             
-            # 4. Replace cleanup step
-            sed -i 's#rm -Rf ffmpeg-HEAD.*#rm -f ffmpeg.tar.xz#g' \
-              vlc/contrib/src/ffmpeg/rules.mak
+            # Replace "git checkout" section
+            sed -i 's#cd ffmpeg-HEAD.*#tar xf ffmpeg.tar.xz --strip-components=1 -C ../../contrib/tarballs/ffmpeg-HEAD#g' $RULES
+            
+            # Replace cleanup
+            sed -i 's#rm -Rf ffmpeg-HEAD.*#rm -f ffmpeg.tar.xz#g' $RULES
             
             ############################################################
-            # Build VLC extras/tools
+            # 🔥 FIX 2 — freetype2 SourceForge mirror is dead
+            ############################################################
+            echo "🔧 Patching freetype2 contrib to use working mirror"
+            
+            FREETYPE_RULES=vlc/contrib/src/freetype2/rules.mak
+            FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
+            
+            sed -i 's#http://heanet.dl.sourceforge.net/sourceforge/freetype/freetype2/2.6.1/freetype-2.6.1.tar.gz#'"$FREETYPE_URL"'#' "$FREETYPE_RULES"
+            
+            ############################################################
+            # Build VLC tools
             ############################################################
             pushd vlc/extras/tools
             export CC=gcc
@@ -260,7 +266,6 @@ jobs:
             ./bootstrap
             make -j"$(nproc)"
             popd
-
 
             #############################################################
             # FIX 2: Now run *VLC real build* which uses Tizen cross GCC
