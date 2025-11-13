@@ -42,29 +42,36 @@ jobs:
           BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
-          echo "📦 Downloading rootstrap..."
+          echo "📦 Downloading Rootstrap..."
           ROOTSTRAP_ZIP="mobile-4.0-rs-device.core_0.0.47_ubuntu-64.zip"
           curl -L -o "${WORKDIR}/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
 
-          echo "📂 Extracting rootstrap..."
+          echo "📂 Extracting Rootstrap..."
           unzip -o "${WORKDIR}/rootstrap.zip" -d "${WORKDIR}/"
 
-          echo "📁 Moving rootstrap to SDK location..."
-          # After unzip we have: ${WORKDIR}/data/platforms/tizen-4.0/...
-          mkdir -p "${WORKDIR}/platforms"
-          mv "${WORKDIR}/data/platforms" "${WORKDIR}/platforms"
+          echo "📁 Installing Rootstrap into Tizen Studio..."
+          # Create target structure if missing
+          mkdir -p "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps"
+
+          # Move ONLY the core rootstrap directory into place
+          mv "${WORKDIR}/data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
+             "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+
+          # Cleanup
           rm -rf "${WORKDIR}/data"
           rm "${WORKDIR}/rootstrap.zip"
 
-          echo "Installing GCC 4.9 Toolchain..."
+          echo "📦 Downloading Toolchain..."
           TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
           curl -L -o "${WORKDIR}/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
+
           unzip -o "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/"
           mv "${WORKDIR}/data/tools/arm-linux-gnueabi-gcc-4.9" "${WORKDIR}/tools/"
           rm -rf "${WORKDIR}/data"
           rm "${WORKDIR}/toolchain.zip"
 
-          echo "✅ Rootstrap and Toolchain installed successfully."
+          echo "✅ Rootstrap & Toolchain installed successfully."
+
 
       - name: Create signing certificate
         run: |
