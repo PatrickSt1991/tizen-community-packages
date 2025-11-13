@@ -38,26 +38,37 @@ jobs:
       - name: Install Tizen 4.0 Rootstrap and Toolchain
         run: |
           set -e
-          echo "Downloading missing Tizen 4.0 components..."
           BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
-          echo "Installing Mobile 4.0 Rootstrap..."
+          echo "📦 Downloading rootstrap..."
           ROOTSTRAP_ZIP="mobile-4.0-rs-device.core_0.0.47_ubuntu-64.zip"
-          curl -L -o "${WORKDIR}/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
-          unzip -o "${WORKDIR}/rootstrap.zip" "data/*" -d "${WORKDIR}/"
-          mv "${WORKDIR}/data/platforms" "${WORKDIR}/platforms"
-          rm -rf "${WORKDIR}/data"
+          curl -L -o "$WORKDIR/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
 
-          echo "Installing GCC 4.9 Toolchain..."
+          echo "📂 Extracting rootstrap..."
+          unzip -o "$WORKDIR/rootstrap.zip" -d "$WORKDIR/"
+
+          ROOTSTRAP_SRC="$WORKDIR/data/platforms/tizen-4.0/mobile-4.0-device.core"
+          ROOTSTRAP_DEST="$WORKDIR/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+
+          echo "📁 Moving rootstrap to SDK location..."
+          mkdir -p "$(dirname "$ROOTSTRAP_DEST")"
+          mv "$ROOTSTRAP_SRC" "$ROOTSTRAP_DEST"
+
+          if [ ! -d "$ROOTSTRAP_DEST" ]; then
+            echo "❌ Rootstrap was NOT installed properly!"
+            exit 1
+          fi
+
+          rm -rf "$WORKDIR/data" "$WORKDIR/rootstrap.zip"
+
+          echo "📦 Installing GCC 4.9 toolchain..."
           TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
-          curl -L -o "${WORKDIR}/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
-          unzip -o "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/"
-          mv "${WORKDIR}/data/tools/arm-linux-gnueabi-gcc-4.9" "${WORKDIR}/tools/"
-          rm -rf "${WORKDIR}/data"
+          curl -L -o "$WORKDIR/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
 
-          echo "✅ Rootstrap and Toolchain installed successfully."
-          rm "${WORKDIR}/rootstrap.zip" "${WORKDIR}/toolchain.zip"
+          unzip -o "$WORKDIR/toolchain.zip" "data/tools/*" -d "$WORKDIR/"
+          mv "$WORKDIR/data/tools/arm-linux-gnueabi-gcc-4.9" "$WORKDIR/tools/"
+          rm -rf "$WORKDIR/data" "$WORKDIR/toolchain.zip"
 
       - name: Create signing certificate
         run: |
@@ -70,16 +81,49 @@ jobs:
 
       - name: Create expect script for signing
         run: |
-          echo '#!/usr/bin/expect -f' > package.exp
-          echo 'set timeout 300' >> package.exp
-          echo 'set build_dir [lindex $argv 0]' >> package.exp
-          echo 'spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' >> package.exp
-          echo 'expect {' >> package.exp
-          echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
-          echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
-          echo '  eof' >> package.exp
-          echo '}' >> package.exp
+          {
+            echo '#!/usr/bin/expect -f'
+            echo 'set timeout 300'
+            echo 'set build_dir [lindex $argv 0]'
+            echo 'spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir'
+            echo 'expect {'
+            echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }'
+            echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }'
+            echo '  eof'
+            echo '}'
+          } > package.exp
           chmod +x package.exp
+
+      - name: Install compiler shims (global)
+        run: |
+          TOOLCHAIN_BIN_DIR="${GITHUB_WORKSPACE}/tizen-studio/tools/arm-linux-gnueabi-gcc-4.9/bin"
+
+          sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
+          sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
+
+          # gcc shim
+          sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null <<'EOF'
+          #!/usr/bin/env bash
+          for a in "$@"; do
+            case "$a" in
+              --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-gcc-real" "$@" ;;
+            esac
+          done
+          exec gcc "$@"
+          EOF
+          
+                    # g++ shim
+                    sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null <<'EOF'
+          #!/usr/bin/env bash
+          for a in "$@"; do
+            case "$a" in
+              --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-g++-real" "$@" ;;
+            esac
+          done
+          exec g++ "$@"
+          EOF
+
+          sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
 
       - name: Upload Tizen Studio artifact
         uses: actions/upload-artifact@v4
@@ -119,24 +163,25 @@ jobs:
     env:
       TIZEN_PATH: ${{ github.workspace }}/tizen-studio
       PACKAGE_EXP: ${{ github.workspace }}/package.exp
+  
     steps:
       - uses: actions/checkout@v4
-
+  
       - name: Download Tizen Studio artifact
         uses: actions/download-artifact@v4
         with:
           name: tizen-studio-artifact
           path: tizen-studio/
-
+  
       - name: Download expect script artifact
         uses: actions/download-artifact@v4
         with:
           name: package-exp-artifact
           path: ./
-
+  
       - name: Make executables
         run: chmod -R +x tizen-studio/ && chmod +x package.exp
-
+  
       - name: Clone and build project
         shell: bash
         run: |
@@ -145,78 +190,55 @@ jobs:
           cd build
           git clone --depth 1 --branch "${{ matrix.branch }}" "https://github.com/${{ matrix.repo }}.git"
           cd "$(basename "${{ matrix.repo }}")"
-
+  
           repo_name="$(basename "${{ matrix.repo }}")"
           echo "✅ Building repository: $repo_name"
-
+  
           if [[ "$repo_name" == "vlc-tizen" ]]; then
-            echo "⚙️ Setting up Tizen SDK layout..."
-            sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
-            sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
-            echo "TIZEN_SDK_VERSION=4.0" | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
-
-            if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
-              if [ -d "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" ]; then
-                sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
-                  /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
-              else
-                echo "❌ Rootstrap missing, listing:"
-                ls -lA "$TIZEN_PATH/platforms/"
-              fi
+            echo "⚙️ Using local Tizen Studio SDK..."
+  
+            export TIZEN_SDK="${TIZEN_PATH}"
+            export TIZEN_SDK_VERSION="4.0"
+  
+            ROOTSTRAP="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+  
+            if [ ! -d "$ROOTSTRAP" ]; then
+              echo "❌ Rootstrap missing at: $ROOTSTRAP"
+              ls -R "$TIZEN_PATH/platforms/tizen-4.0"
+              exit 1
             fi
-
-            export SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core/usr"
+  
+            echo "✅ Rootstrap found."
+  
+            export SYSROOT="$ROOTSTRAP/usr"
             export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
             export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
             export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
-            echo "✅ Using sysroot: $SYSROOT"
-
+            echo "🔧 Using sysroot: $SYSROOT"
+  
             TOOLCHAIN_BIN_DIR="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin"
-            if [ -f "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" ]; then
+  
+            echo "🧩 Ensuring compiler shims exist..."
+            if [ ! -f "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real" ]; then
               sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
               sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
             fi
-
-            echo "🧩 Creating compiler shims (no heredocs)..."
-
+  
             # GCC shim
-            sudo bash -c "echo '#!/usr/bin/env bash' > \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo 'args=()' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo 'has_sysroot=0' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo 'for a in \"\$@\"; do' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo '  case \"\$a\" in' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo '    --sysroot=*) has_sysroot=1 ;;' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo '  esac' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo '  args+=(\"\$a\")' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo 'done' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo 'if [ \"\$has_sysroot\" -eq 0 ]; then' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo '  exec gcc \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo 'else' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo '  real_dir=\"\$(dirname \"\$0\")\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo '  exec \"\$real_dir/arm-linux-gnueabi-gcc-real\" \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-            sudo bash -c "echo 'fi' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
-
+            echo '#!/usr/bin/env bash' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo 'for a in "$@"; do case "$a" in --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-gcc-real" "$@";; esac; done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+            echo 'exec gcc "$@"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
+  
             # G++ shim
-            sudo bash -c "echo '#!/usr/bin/env bash' > \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo 'args=()' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo 'has_sysroot=0' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo 'for a in \"\$@\"; do' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo '  case \"\$a\" in' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo '    --sysroot=*) has_sysroot=1 ;;' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo '  esac' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo '  args+=(\"\$a\")' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo 'done' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo 'if [ \"\$has_sysroot\" -eq 0 ]; then' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo '  exec g++ \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo 'else' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo '  real_dir=\"\$(dirname \"\$0\")\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo '  exec \"\$real_dir/arm-linux-gnueabi-g++-real\" \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-            sudo bash -c "echo 'fi' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
-
+            echo '#!/usr/bin/env bash' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'for a in "$@"; do case "$a" in --sysroot=*) exec "$(dirname "$0")/arm-linux-gnueabi-g++-real" "$@";; esac; done' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+            echo 'exec g++ "$@"' | sudo tee -a "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
+  
             sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
-
+  
             build_script="${{ matrix.build_script }}"
             build_args="${{ matrix.build_args }}"
+  
             if [ -n "$build_script" ] && [ -f "$build_script" ]; then
               chmod +x "$build_script"
               echo "🚧 Running $build_script $build_args with host compilers..."
@@ -229,12 +251,13 @@ jobs:
               echo "❌ VLC build script not found!"
               exit 1
             fi
+  
           else
             echo "🌐 Standard web build for $repo_name..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
           fi
-
+  
           username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
           appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
           output_name="${username}-${appname}.wgt"
