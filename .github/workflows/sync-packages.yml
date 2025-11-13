@@ -220,8 +220,7 @@ jobs:
             echo "🔧 Patching REAL VLC contrib ffmpeg + freetype rules…"
             
             FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
-            
-FREETYPE_URL="https://distfiles.macports.org/freetype/freetype-2.6.1.tar.gz"
+            FREETYPE_URL="https://distfiles.macports.org/freetype/freetype-2.6.1.tar.gz"
             
             # discover actual rule files
             FFMPEG_RULES="$(find vlc/contrib/src/ffmpeg -type f -name 'rules.mak*' | head -n1)"
