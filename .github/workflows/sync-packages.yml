@@ -218,39 +218,48 @@ jobs:
             # Step 2 — Patch contrib ffmpeg + freetype rules (in vlc/contrib)
             #############################################################
             echo "🔧 Patching VLC contrib ffmpeg + freetype rules…"
-
+            
             FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
-
-            FFMPEG_RULES_IN="vlc/contrib/src/ffmpeg/rules.mak.in"
-            FFMPEG_RULES="vlc/contrib/src/ffmpeg/rules.mak"
-
-            if [[ -f "$FFMPEG_RULES_IN" ]]; then
-              RULES_FILE="$FFMPEG_RULES_IN"
-            else
-              RULES_FILE="$FFMPEG_RULES"
+            
+            echo "🔧 Locating real ffmpeg rules.mak…"
+            
+            # Find the actual FFmpeg rule file used by contrib build
+            RULES_FILE=$(grep -rl "git.libav.org" vlc/contrib/src/ffmpeg | head -n1)
+            
+            if [[ -z "$RULES_FILE" ]]; then
+              echo "❌ Could not find ffmpeg rules.mak — stopping"
+              find vlc/contrib/src/ffmpeg -maxdepth 3 -type f || true
+              exit 1
             fi
-
+            
             echo "🔧 Using FFmpeg rules file: $RULES_FILE"
-
+            
+            # Replacement command for fetching FFmpeg source
             NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
-
-            sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD/c\\${NEW_FFMPEG_COMMAND}" "$RULES_FILE" || {
-              echo "⚠️ Failed to patch FFmpeg rule in $RULES_FILE"
+            
+            # Replace the old libav clone rule
+            sed -i "/git.libav.org/c\\${NEW_FFMPEG_COMMAND}" "$RULES_FILE" || {
+              echo "❌ Failed to patch FFmpeg rule in $RULES_FILE"
               exit 1
             }
-
+            
+            #############################################################
+            # Patch freetype (dead mirror fix)
+            #############################################################
             FREETYPE_RULES="vlc/contrib/src/freetype2/rules.mak"
+            
             if [[ -f "$FREETYPE_RULES" ]]; then
               sed -i "s#http://.*freetype.*2\.6\.1.*#$FREETYPE_URL#g" "$FREETYPE_RULES" || {
-                echo "⚠️ Failed to patch freetype URL in $FREETYPE_RULES"
+                echo "❌ Failed to patch freetype URL in $FREETYPE_RULES"
                 exit 1
               }
             else
-              echo "⚠️ Freetype rules file not found at $FREETYPE_RULES (continuing anyway)"
+              echo "⚠️ Freetype rules file not found at $FREETYPE_RULES (continuing)"
             fi
-
+            
             echo "🔧 FFmpeg + freetype patches applied successfully."
+
 
             #############################################################
             # Step 3 — Build extras/tools with HOST compiler
