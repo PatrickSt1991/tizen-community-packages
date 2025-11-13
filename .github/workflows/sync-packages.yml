@@ -215,38 +215,66 @@ jobs:
             fi
 
             #############################################################
-            # REAL location — patch contrib rules (NOT extras/tools)
+            # Step 2 — DEBUG + hard‑patch the ffmpeg-HEAD fetch rule
+            # (rules live in vlc/contrib, not extras/tools)
             #############################################################
-            echo "🔧 Patching REAL VLC contrib ffmpeg + freetype rules…"
+            echo "🔧 DEBUG/PATCH: contrib ffmpeg rule"
             
+            # Locate the actual rules file used by buildall.sh
+            FFMPEG_RULES=$(ls vlc/contrib/src/ffmpeg/rules.mak* 2>/dev/null | head -n1 || true)
+            if [[ -z "$FFMPEG_RULES" ]]; then
+              echo "❌ Could not find vlc/contrib/src/ffmpeg/rules.mak*"; exit 2
+            fi
+            echo "📄 Using: $FFMPEG_RULES"
+            
+            # Show the current ffmpeg-HEAD recipe before patch
+            echo "---- BEFORE (ffmpeg-HEAD.tar.xz recipe) ----"
+            awk '
+              /ffmpeg-HEAD\.tar\.xz:/ {print ">> " NR ":" $0; show=1; next}
+              show && /^\t/ {print ">> " NR ":" $0; next}
+              show && !/^\t/ {show=0}
+            ' "$FFMPEG_RULES" || true
+            echo "-------------------------------------------"
+            
+            # Replace the entire recipe with a tarball download (no git.libav.org)
             FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
-            FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
+            awk -v url="$FFMPEG_URL" '
+              BEGIN{inrec=0}
+              /ffmpeg-HEAD\.tar\.xz:/ {
+                print $0
+                print "\tset -e; TEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf $$TEMP_DIR; mkdir -p $$TEMP_DIR; curl -L \"" url "\" | tar xJ --strip-components=1 -C $$TEMP_DIR; (cd ../../contrib/tarballs && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf $$TEMP_DIR"
+                inrec=1; next
+              }
+              inrec && /^\t/ { next }           # drop old recipe lines
+              inrec && !/^\t/ { inrec=0; print; next }
+              { print }
+            ' "$FFMPEG_RULES" > "$FFMPEG_RULES.new" && mv "$FFMPEG_RULES.new" "$FFMPEG_RULES"
             
-            # autodetect correct files
-            FFMPEG_RULES=$(find vlc/contrib/src/ffmpeg -type f -name "rules.mak*" | head -n1)
-            FREETYPE_RULES=$(find vlc/contrib/src/freetype2 -type f -name "rules.mak*" | head -n1)
+            # Show the patched recipe
+            echo "---- AFTER (ffmpeg-HEAD.tar.xz recipe) ----"
+            awk '
+              /ffmpeg-HEAD\.tar\.xz:/ {print ">> " NR ":" $0; show=1; next}
+              show && /^\t/ {print ">> " NR ":" $0; next}
+              show && !/^\t/ {show=0}
+            ' "$FFMPEG_RULES" || true
+            echo "------------------------------------------"
             
-            echo "🔧 FFmpeg rules file: $FFMPEG_RULES"
-            echo "🔧 Freetype rules file: $FREETYPE_RULES"
-            
-            if [[ ! -f "$FFMPEG_RULES" ]]; then
-              echo "❌ ERROR: ffmpeg rules file not found under vlc/contrib/src/ffmpeg"
-              exit 1
+            # Failsafe: pre-seed the tarball so fetch never tries to clone
+            mkdir -p vlc/contrib/tarballs
+            rm -rf vlc/contrib/tarballs/ffmpeg-HEAD
+            if [[ ! -f vlc/contrib/tarballs/ffmpeg-HEAD.tar.xz ]]; then
+              echo "📦 Pre-seeding ffmpeg-HEAD.tar.xz (failsafe)…"
+              TEMP_DIR="vlc/contrib/tarballs/ffmpeg-HEAD"
+              mkdir -p "$TEMP_DIR"
+              curl -L "$FFMPEG_URL" | tar xJ --strip-components=1 -C "$TEMP_DIR"
+              (cd vlc/contrib/tarballs && tar cvJ ffmpeg-HEAD) > vlc/contrib/tarballs/ffmpeg-HEAD.tar.xz
+              rm -rf "$TEMP_DIR"
             fi
+            ls -lh vlc/contrib/tarballs/ffmpeg-HEAD.tar.xz || true
             
-            # Patch the broken ffmpeg-HEAD git clone
-            sed -i -E "s#git clone[^\n]*ffmpeg-HEAD#TEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; \
-            rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; \
-            curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; \
-            ( cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD ) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; \
-            rm -Rf \$\$TEMP_DIR#g" "$FFMPEG_RULES"
-            
-            # Patch freetype rules
-            if [[ -f "$FREETYPE_RULES" ]]; then
-              sed -i "s#http://.*freetype.*2\.6\.1.*#$FREETYPE_URL#g" "$FREETYPE_RULES"
-            fi
-            
-            echo "✅ REAL VLC contrib patches applied."
+            # Extra debug: surface any remaining dead URLs
+            echo "🔎 Grepping for git.libav.org under vlc/contrib…"
+            grep -Rns "git\.libav\.org" vlc/contrib || echo "✅ No references to git.libav.org"
 
             #############################################################
             # Step 3 — Build extras/tools with HOST compiler
