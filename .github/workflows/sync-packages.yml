@@ -244,7 +244,10 @@ jobs:
             
             # If bootstrap regenerated contrib files, patch AFTER this
             popd
-            
+            echo "📂 DEBUG: Listing VLC extras/tools tree..."
+            find vlc/extras -maxdepth 5 -type f | sort || true
+            echo "📂 DEBUG END"
+
             echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)…"
             
             RULES="vlc/extras/tools/contrib/src/ffmpeg/rules.mak.in"
