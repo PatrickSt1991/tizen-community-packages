@@ -70,17 +70,15 @@ jobs:
 
       - name: Create expect script for signing
         run: |
-          cat <<'EOF' > package.exp
-          #!/usr/bin/expect -f
-          set timeout 300
-          set build_dir [lindex $argv 0]
-          spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir
-          expect {
-            "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-            "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }
-            eof
-          }
-          EOF
+          echo '#!/usr/bin/expect -f' > package.exp
+          echo 'set timeout 300' >> package.exp
+          echo 'set build_dir [lindex $argv 0]' >> package.exp
+          echo 'spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir' >> package.exp
+          echo 'expect {' >> package.exp
+          echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
+          echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }' >> package.exp
+          echo '  eof' >> package.exp
+          echo '}' >> package.exp
           chmod +x package.exp
 
       - name: Upload Tizen Studio artifact
@@ -152,90 +150,89 @@ jobs:
           echo "✅ Building repository: $repo_name"
 
           if [[ "$repo_name" == "vlc-tizen" ]]; then
-          echo "⚙️ Setting up Tizen SDK layout..."
-          sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
-          sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
-          echo "TIZEN_SDK_VERSION=4.0" | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
+            echo "⚙️ Setting up Tizen SDK layout..."
+            sudo mkdir -p /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps
+            sudo ln -sfn "$TIZEN_PATH" /home/runner/tizen-sdk
+            echo "TIZEN_SDK_VERSION=4.0" | sudo tee /home/runner/tizen-sdk/sdk.version >/dev/null
 
-          if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
-            if [ -d "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" ]; then
-              sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
-                /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
-            else
-              echo "❌ Rootstrap missing, listing:"
-              ls -lA "$TIZEN_PATH/platforms/"
+            if [ ! -e /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core ]; then
+              if [ -d "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" ]; then
+                sudo ln -s "$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
+                  /home/runner/tizen-sdk/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core
+              else
+                echo "❌ Rootstrap missing, listing:"
+                ls -lA "$TIZEN_PATH/platforms/"
+              fi
             fi
-          fi
 
-          export SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core/usr"
-          export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
-          export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
-          export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
-          echo "✅ Using sysroot: $SYSROOT"
+            export SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core/usr"
+            export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/include"
+            export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/lib"
+            export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig:$SYSROOT/usr/lib/pkgconfig"
+            echo "✅ Using sysroot: $SYSROOT"
 
-          TOOLCHAIN_BIN_DIR="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          if [ -f "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" ]; then
-            sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
-            sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
-          fi
+            TOOLCHAIN_BIN_DIR="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin"
+            if [ -f "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" ]; then
+              sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc-real"
+              sudo mv "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++-real"
+            fi
 
-          echo "🧩 Creating compiler shims..."
-          cat <<'EOF' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" >/dev/null
-          #!/usr/bin/env bash
-          args=()
-          has_sysroot=0
-          for a in "$@"; do
-            case "$a" in
-              --sysroot=*) has_sysroot=1 ;;
-            esac
-            args+=("$a")
-          done
-          if [ $has_sysroot -eq 0 ]; then
-            exec gcc "${args[@]}"
-          else
-            real_dir="$(dirname "$0")"
-            exec "$real_dir/arm-linux-gnueabi-gcc-real" "${args[@]}"
-          fi
-          EOF
-          
-                    cat <<'EOF' | sudo tee "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++" >/dev/null
-          #!/usr/bin/env bash
-          args=()
-          has_sysroot=0
-          for a in "$@"; do
-            case "$a" in
-              --sysroot=*) has_sysroot=1 ;;
-            esac
-            args+=("$a")
-          done
-          if [ $has_sysroot -eq 0 ]; then
-            exec g++ "${args[@]}"
-          else
-            real_dir="$(dirname "$0")"
-            exec "$real_dir/arm-linux-gnueabi-g++-real" "${args[@]}"
-          fi
-          EOF
+            echo "🧩 Creating compiler shims (no heredocs)..."
 
-          sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+            # GCC shim
+            sudo bash -c "echo '#!/usr/bin/env bash' > \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo 'args=()' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo 'has_sysroot=0' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo 'for a in \"\$@\"; do' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo '  case \"\$a\" in' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo '    --sysroot=*) has_sysroot=1 ;;' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo '  esac' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo '  args+=(\"\$a\")' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo 'done' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo 'if [ \"\$has_sysroot\" -eq 0 ]; then' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo '  exec gcc \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo 'else' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo '  real_dir=\"\$(dirname \"\$0\")\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo '  exec \"\$real_dir/arm-linux-gnueabi-gcc-real\" \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
+            sudo bash -c "echo 'fi' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc\""
 
-          build_script="${{ matrix.build_script }}"
-          build_args="${{ matrix.build_args }}"
-          if [ -n "$build_script" ] && [ -f "$build_script" ]; then
-            chmod +x "$build_script"
-            echo "🚧 Running $build_script $build_args with host compilers..."
-            CC=gcc CXX=g++ AR=ar LD=ld AS=as "./$build_script" $build_args || (
-              echo "❌ Build failed, dumping config.log..."
-              find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
+            # G++ shim
+            sudo bash -c "echo '#!/usr/bin/env bash' > \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo 'args=()' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo 'has_sysroot=0' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo 'for a in \"\$@\"; do' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo '  case \"\$a\" in' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo '    --sysroot=*) has_sysroot=1 ;;' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo '  esac' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo '  args+=(\"\$a\")' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo 'done' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo 'if [ \"\$has_sysroot\" -eq 0 ]; then' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo '  exec g++ \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo 'else' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo '  real_dir=\"\$(dirname \"\$0\")\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo '  exec \"\$real_dir/arm-linux-gnueabi-g++-real\" \"\${args[@]}\"' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+            sudo bash -c "echo 'fi' >> \"$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++\""
+
+            sudo chmod +x "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-gcc" "$TOOLCHAIN_BIN_DIR/arm-linux-gnueabi-g++"
+
+            build_script="${{ matrix.build_script }}"
+            build_args="${{ matrix.build_args }}"
+            if [ -n "$build_script" ] && [ -f "$build_script" ]; then
+              chmod +x "$build_script"
+              echo "🚧 Running $build_script $build_args with host compilers..."
+              CC=gcc CXX=g++ AR=ar LD=ld AS=as "./$build_script" $build_args || (
+                echo "❌ Build failed, dumping config.log..."
+                find . -name config.log -exec echo '---- {} ----' \; -exec tail -n 80 {} \;
+                exit 1
+              )
+            else
+              echo "❌ VLC build script not found!"
               exit 1
-            )
+            fi
           else
-            echo "❌ VLC build script not found!"
-            exit 1
-          fi
-          else
-          echo "🌐 Standard web build for $repo_name..."
-          "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-          "$PACKAGE_EXP" . || true
+            echo "🌐 Standard web build for $repo_name..."
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
+            "$PACKAGE_EXP" . || true
           fi
 
           username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
@@ -243,11 +240,29 @@ jobs:
           output_name="${username}-${appname}.wgt"
           find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
 
-      - name: Upload WGTS to release
+      - name: Upload WGT artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wgt-${{ matrix.repo }}
+          path: wgt_files/*.wgt
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: tizen-build
+    steps:
+      - name: Download all WGT artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-wgts
+
+      - name: List downloaded files
+        run: ls -R release-wgts || echo "No WGT files found"
+
+      - name: Create GitHub Release with all WGTS
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "community-${{ github.run_number }}"
           name: "Community Packages ${{ github.run_number }}"
-          files: "wgt_files/*.wgt"
+          files: "release-wgts/**/*.wgt"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
