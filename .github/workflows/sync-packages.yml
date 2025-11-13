@@ -135,100 +135,145 @@ jobs:
     env:
       TIZEN_PATH: ${{ github.workspace }}/tizen-studio
       PACKAGE_EXP: ${{ github.workspace }}/package.exp
-  
+
     steps:
       - uses: actions/checkout@v4
-  
+
       - name: Download Tizen Studio artifact
         uses: actions/download-artifact@v4
         with:
           name: tizen-studio-artifact
           path: tizen-studio/
-  
+
       - name: Download expect script artifact
         uses: actions/download-artifact@v4
         with:
           name: package-exp-artifact
           path: ./
-  
+
       - name: Make executables
-        run: chmod -R +x tizen-studio/ && chmod +x package.exp
-  
+        run: |
+          chmod -R +x tizen-studio/
+          chmod +x package.exp
+
       - name: Clone and build project
         shell: bash
         run: |
           set -e
+
           mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
           cd build
+
           git clone --depth 1 --branch "${{ matrix.branch }}" "https://github.com/${{ matrix.repo }}.git"
           cd "$(basename "${{ matrix.repo }}")"
-  
+
           repo_name="$(basename "${{ matrix.repo }}")"
-          echo "✅ Building repository: $repo_name"
-  
+          echo "🔨 Building repository: $repo_name"
+
+          ###############################################
+          #            VLC-TIZEN SPECIAL CASE           #
+          ###############################################
           if [[ "$repo_name" == "vlc-tizen" ]]; then
             echo "⚙️ Using local Tizen Studio SDK..."
-          
-            ROOTSTRAP="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          
-            if [[ ! -d "$ROOTSTRAP" ]]; then
-              echo "❌ Rootstrap missing at: $ROOTSTRAP"
-              ls -R "$TIZEN_PATH/platforms/tizen-4.0"
+
+            SYSROOT="$TIZEN_PATH/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+            if [[ ! -d "$SYSROOT" ]]; then
+              echo "❌ Rootstrap missing at: $SYSROOT"
+              find "$TIZEN_PATH/platforms/tizen-4.0" -maxdepth 4 -type d
               exit 1
             fi
-          
-            echo "✅ Rootstrap found."
-            export SYSROOT="$ROOTSTRAP/usr"
+
             echo "🔧 Using sysroot: $SYSROOT"
-          
-            # *** HERE IS THE FIX ***
-            # Tell VLC build system which compiler is for target, NOT for tools
-            export CC_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
-            export CXX_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
-            export AR_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-ar"
-            export AS_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-as"
-            export LD_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-ld"
-            export STRIP_FOR_TARGET="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-strip"
-          
-            # Important: force native tools (help2man, ragel, protoc, meson...)
-            export CC="gcc"
-            export CXX="g++"
-          
-            echo "🧩 Native tools compiler: $(which gcc)"
-            echo "🎯 Target compiler: $CC_FOR_TARGET"
-          
-            # VLC expects PATH to contain native tools AND ARM toolchain
-            export PATH="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-          
+
+            # ARM toolchain directory
+            TOOLCHAIN_BIN="$TIZEN_PATH/tools/arm-linux-gnueabi-gcc-4.9/bin"
+
+            echo "🧩 Native tools compiler: /usr/bin/gcc"
+            echo "🎯 Target compiler: $TOOLCHAIN_BIN/arm-linux-gnueabi-gcc"
+
+            ##########################################################
+            #           FIX VLC CROSS-BUILD ENVIRONMENT             #
+            ##########################################################
+
+            # Tell VLC the correct SDK root
+            export TIZEN_SDK="$TIZEN_PATH"
+            export TIZEN_SDK_VERSION="4.0"
+
+            # Real sysroot path
+            export SYSROOT="$SYSROOT"
+
+            # --- HOST tools must use native compiler ---
+            export BUILDCC="gcc"
+            export BUILDCXX="g++"
+            export BUILDCFLAGS=""
+            export BUILDLDFLAGS=""
+
+            # --- TARGET compilers ---
+            export CC="$TOOLCHAIN_BIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+            export CXX="$TOOLCHAIN_BIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+            export AR="$TOOLCHAIN_BIN/arm-linux-gnueabi-ar"
+            export AS="$TOOLCHAIN_BIN/arm-linux-gnueabi-as"
+            export LD="$TOOLCHAIN_BIN/arm-linux-gnueabi-ld"
+            export STRIP="$TOOLCHAIN_BIN/arm-linux-gnueabi-strip"
+
+            # PATH: host compilers FIRST → arm compilers → system PATH
+            export PATH="/usr/bin:/usr/local/bin:$TOOLCHAIN_BIN:$PATH"
+
+            echo "📦 Environment prepared:"
+            echo "  HOST CC:  $BUILDCC"
+            echo "  HOST CXX: $BUILDCXX"
+            echo "  TARGET CC: $CC"
+            echo "  TARGET CXX: $CXX"
+            echo "  SYSROOT:  $SYSROOT"
+            echo "  TIZEN SDK: $TIZEN_SDK"
+
+            ##########################################################
+            #                  RUN VLC BUILD SCRIPT                  #
+            ##########################################################
+
             build_script="${{ matrix.build_script }}"
             build_args="${{ matrix.build_args }}"
-          
-            if [ -n "$build_script" ] && [ -f "$build_script" ]; then
+
+            if [[ -n "$build_script" && -f "$build_script" ]]; then
               chmod +x "$build_script"
-              echo "🚧 Running $build_script $build_args for VLC..."
-              "./$build_script" $build_args
+
+              echo "🚧 Running VLC build: $build_script $build_args"
+              "./$build_script" $build_args || (
+                echo "❌ VLC build failed — dumping config.logs:"
+                find . -name config.log -exec echo "---- {} ----" \; -exec tail -n 100 {} \;
+                exit 1
+              )
             else
-              echo "❌ VLC build script not found!"
+              echo "❌ VLC build script missing!"
               exit 1
             fi
-          
+
+          ###############################################
+          #         STANDARD WEBAPP BUILD CASE          #
+          ###############################################
           else
             echo "🌐 Standard web build for $repo_name..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$PACKAGE_EXP" . || true
           fi
 
-  
+          ###########################################################
+          #              COPY OUTPUT WGT TO ARTIFACT DIR            #
+          ###########################################################
           username=$(echo "${{ matrix.repo }}" | cut -d'/' -f1)
           appname=$(basename "${{ matrix.repo }}" | sed 's/-tizen//')
           output_name="${username}-${appname}.wgt"
+
           find . -name "*.wgt" -exec mv {} "$GITHUB_WORKSPACE/wgt_files/$output_name" \;
 
-      - name: Upload WGT artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload WGTS to release
+        uses: softprops/action-gh-release@v2
         with:
-          name: wgt-${{ matrix.repo }}
-          path: wgt_files/*.wgt
+          tag_name: "community-${{ github.run_number }}"
+          name: "Community Packages ${{ github.run_number }}"
+          files: "wgt_files/*.wgt"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-release:
     runs-on: ubuntu-latest
