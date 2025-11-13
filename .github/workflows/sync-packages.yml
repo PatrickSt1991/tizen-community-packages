@@ -247,7 +247,7 @@ jobs:
             
             echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)…"
             
-            RULES="vlc/extras/tools/contrib/src/ffmpeg/rules.mak"
+            RULES="vlc/extras/tools/contrib/src/ffmpeg/rules.mak.in"
             FREETYPE_RULES="vlc/contrib/src/freetype2/rules.mak"
             
             FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
@@ -262,7 +262,6 @@ jobs:
             
             # Force contrib rules to be fully generated BEFORE patching
             pushd vlc/extras/tools
-            make list || true
             popd
             
             # Correct replacement command for ffmpeg-HEAD rule
