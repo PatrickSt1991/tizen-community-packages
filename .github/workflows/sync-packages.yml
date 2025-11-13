@@ -231,6 +231,9 @@ jobs:
             export CPPFLAGS=""
           
             ./bootstrap
+            echo "🔧 Configuring VLC extras/tools..."
+            ./configure  # <-- ADD THIS MISSING STEP
+          
             popd
           
             #############################################################
