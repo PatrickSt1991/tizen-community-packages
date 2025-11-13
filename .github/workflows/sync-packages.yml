@@ -131,7 +131,9 @@ jobs:
 
   tizen-build:
     runs-on: ubuntu-latest
-    needs: prepare
+    needs:
+      - prepare
+      - generate-matrix-build
 
     strategy:
       fail-fast: false
