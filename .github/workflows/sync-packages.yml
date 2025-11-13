@@ -1,351 +1,204 @@
-name: Sync Tizen Community Packages
-
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"
-
-permissions:
-  contents: write
-
-env:
-  TIZEN_STUDIO_VER: 4
-  CERT_NAME: CommunityPack
-  CERT_PASSWORD: 1234
-  NODE_OPTIONS: --openssl-legacy-provider
-
-jobs:
-  prepare:
+tizen-build:
     runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - generate-matrix-build
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate-matrix-build.outputs.matrix).include }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      # ---------------------------------------------------
+      # Restore Tizen Studio + signing script from prepare job
+      # ---------------------------------------------------
+      - name: Download Tizen Studio artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tizen-studio-artifact
+          path: tizen-studio
+
+      - name: Download expect script
+        uses: actions/download-artifact@v4
+        with:
+          name: package-exp-artifact
+          path: .
+
+      # ---------------------------------------------------
+      # Dependencies required by VLC extras/tools
+      # ---------------------------------------------------
+      - name: Install VLC prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            wget zip git jq nodejs npm expect curl unzip build-essential \
-            libtool help2man ragel nasm protobuf-compiler meson
-          
-      - name: Download and install Tizen Studio 4.0
-        run: |
-          mkdir -p tizen-studio
-          curl -L -o tizen-installer "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
-          chmod +x tizen-installer
-          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
-          rm ./tizen-installer
-          chmod -R +x tizen-studio/tools/ide/bin
+            help2man ragel nasm meson protobuf-compiler \
+            build-essential pkg-config automake autoconf libtool \
+            gettext
 
-      - name: Install Tizen 4.0 Rootstrap and Toolchain
+      # ---------------------------------------------------
+      # Clone & Build
+      # ---------------------------------------------------
+      - name: Clone and build project
+        shell: bash
+        env:
+          TIZEN_SDK: ${{ github.workspace }/tizen-studio
+          TIZEN_PATH: ${{ github.workspace }/tizen-studio
         run: |
           set -e
-          echo "Downloading missing Tizen 4.0 components..."
-          BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
-          WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
-          echo "📦 Downloading Rootstrap..."
-          ROOTSTRAP_ZIP="mobile-4.0-rs-device.core_0.0.47_ubuntu-64.zip"
-          curl -L -o "${WORKDIR}/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
+          mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
+          cd build
 
-          echo "📂 Extracting Rootstrap..."
-          unzip -o "${WORKDIR}/rootstrap.zip" -d "${WORKDIR}/"
+          git clone --depth 1 --branch "${{ matrix.branch }}" "https://github.com/${{ matrix.repo }}.git"
+          cd "$(basename "${{ matrix.repo }}")"
 
-          echo "📁 Installing Rootstrap into Tizen Studio..."
-          mkdir -p "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps"
-          mv "${WORKDIR}/data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
-             "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          repo_name="$(basename "${{ matrix.repo }}")"
+          echo "🔨 Building repository: $repo_name"
 
-          rm -rf "${WORKDIR}/data"
-          rm "${WORKDIR}/rootstrap.zip"
+          ###################################################
+          #                 VLC-TIZEN SPECIAL
+          ###################################################
+          if [[ "$repo_name" == "vlc-tizen" ]]; then
+            echo "⚙️ Using local Tizen Studio SDK..."
 
-          echo "📦 Downloading Toolchain..."
-          TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
-          curl -L -o "${WORKDIR}/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
+            SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+            echo "🔧 Using sysroot: $SYSROOT"
 
-          unzip -o "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/"
-          mv "${WORKDIR}/data/tools/arm-linux-gnueabi-gcc-4.9" "${WORKDIR}/tools/"
-          rm -rf "${WORKDIR}/data"
-          rm "${WORKDIR}/toolchain.zip"
-
-          echo "✅ Rootstrap & Toolchain installed successfully."
-
-      - name: Create signing certificate
-        run: |
-          mkdir -p tizen-studio-data/keystore/author tizen-studio-data/profile
-          ./tizen-studio/tools/ide/bin/tizen certificate -a "$CERT_NAME" -p "$CERT_PASSWORD" \
-            -c NL -s Community -ct World -o "$CERT_NAME" -n "$CERT_NAME" -e community@example.org -f "$CERT_NAME"
-          ./tizen-studio/tools/ide/bin/tizen security-profiles add -n "$CERT_NAME" \
-            -a "./tizen-studio-data/keystore/author/${CERT_NAME}.p12" -p "$CERT_PASSWORD"
-          ./tizen-studio/tools/ide/bin/tizen cli-config "profiles.path=./tizen-studio-data/profile/profiles.xml"
-
-      - name: Create expect script for signing
-        run: |
-          {
-            echo '#!/usr/bin/expect -f'
-            echo 'set timeout 300'
-            echo 'set build_dir [lindex $argv 0]'
-            echo 'spawn $env(TIZEN_PATH)/tools/ide/bin/tizen package -t wgt -s CommunityPack -- $build_dir'
-            echo 'expect {'
-            echo '  "Author password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }'
-            echo '  "Distributor1 password:" { send "$env(CERT_PASSWORD)\r"; exp_continue }'
-            echo '  eof'
-            echo '}'
-          } > package.exp
-          chmod +x package.exp
-
-      - name: Upload Tizen Studio artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tizen-studio-artifact
-          path: tizen-studio/
-          retention-days: 1
-
-      - name: Upload expect script artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-exp-artifact
-          path: package.exp
-          retention-days: 1
-
-  generate-matrix-build:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: set-matrix
-        run: |
-          matrix=$(jq -c '{include: [to_entries[] | {
-            repo: .key,
-            branch: .value.branch,
-            build_script: (.value.build_script // ""),
-            build_args: (.value.build_args // "")
-          }]}' repos-build.json)
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
-  tizen-build:
-      runs-on: ubuntu-latest
-      needs:
-        - prepare
-        - generate-matrix-build
-  
-      strategy:
-        fail-fast: false
-        matrix:
-          include: ${{ fromJson(needs.generate-matrix-build.outputs.matrix).include }}
-  
-      steps:
-        - uses: actions/checkout@v4
-  
-        # ---------------------------------------------------
-        # Restore Tizen Studio + signing script from prepare job
-        # ---------------------------------------------------
-        - name: Download Tizen Studio artifact
-          uses: actions/download-artifact@v4
-          with:
-            name: tizen-studio-artifact
-            path: tizen-studio
-  
-        - name: Download expect script
-          uses: actions/download-artifact@v4
-          with:
-            name: package-exp-artifact
-            path: .
-  
-        # ---------------------------------------------------
-        # Dependencies required by VLC extras/tools
-        # ---------------------------------------------------
-        - name: Install VLC prerequisites
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y \
-              help2man ragel nasm meson protobuf-compiler \
-              build-essential pkg-config automake autoconf libtool \
-              gettext
-  
-        # ---------------------------------------------------
-        # Clone & Build
-        # ---------------------------------------------------
-        - name: Clone and build project
-          shell: bash
-          env:
-            TIZEN_SDK: ${{ github.workspace }/tizen-studio
-            TIZEN_PATH: ${{ github.workspace }/tizen-studio
-          run: |
-            set -e
-  
-            mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
-            cd build
-  
-            git clone --depth 1 --branch "${{ matrix.branch }}" "https://github.com/${{ matrix.repo }}.git"
-            cd "$(basename "${{ matrix.repo }}")"
-  
-            repo_name="$(basename "${{ matrix.repo }}")"
-            echo "🔨 Building repository: $repo_name"
-  
-            ###################################################
-            #                 VLC-TIZEN SPECIAL
-            ###################################################
-            if [[ "$repo_name" == "vlc-tizen" ]]; then
-              echo "⚙️ Using local Tizen Studio SDK..."
-  
-              SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-              echo "🔧 Using sysroot: $SYSROOT"
-  
-              # Proper sdk.version (some scripts source this file!)
-              if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
-                printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
-                chmod +x "$TIZEN_SDK/sdk.version"
-                echo "📄 Created sdk.version script"
-              fi
-  
-              echo "🔧 Preparing environment..."
-  
-              # Ensure Tizen cross compiler is in PATH for buildall.sh ONLY
-              export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
-  
-              #############################################################
-              # FIX 1: Build VLC extras/tools using HOST system GCC
-              # BUT force compatibility with old VLC toolchain (C++03)
-              #############################################################
-              echo "🔧 Prebuilding VLC tools (native GCC, C++03)..."
-              
-              # -------------------------------------------------------
-              # 1) Clone VLC if missing
-              # -------------------------------------------------------
-              if [[ ! -d vlc ]]; then
-                git clone https://code.videolan.org/videolan/vlc.git vlc
-                pushd vlc
-                git checkout 4e0fa1b
-                popd
-              fi
-              
-              # -------------------------------------------------------
-              # 2) Ensure toolchain permissions
-              # -------------------------------------------------------
-              echo "🔧 Making toolchain executable..."
-              chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
-              chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
-              
-              # -------------------------------------------------------
-              # 3) Build extras/tools with HOST GCC
-              # -------------------------------------------------------
-              pushd vlc/extras/tools
-              export CC=gcc
-              export CXX=g++
-              export CFLAGS="-std=gnu11"
-              export CXXFLAGS="-std=gnu++03 -Wno-deprecated-declarations"
-              export LDFLAGS=""
-              export CPPFLAGS=""
-              
-              echo "🔧 Bootstrapping extras/tools..."
-              ./bootstrap
-              
-              # If bootstrap regenerated contrib files, patch AFTER this
-              popd
-              
-              echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)…"
-              
-              RULES="vlc/contrib/src/ffmpeg/rules.mak"
-              FREETYPE_RULES="vlc/contrib/src/freetype2/rules.mak"
-              
-              FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
-              FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
-              
-              # Ensure contrib directories exist
-              mkdir -p vlc/contrib/tarballs/
-              
-              # -------------------------------------------------------
-              # 🔥 FIX FAILED FFMPEG GIT CLONE
-              # -------------------------------------------------------
-              
-              # This is the new, working command for the Makefile rule.
-              # Note: It must be indented with a TAB for the Makefile.
-              NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
-              
-              # Use sed to find the line containing the broken 'git clone' 
-              # command and replace it entirely with our new curl-based command.
-              # <--- THIS IS THE MODIFIED LINE
-              sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD && git clone/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
-              
-              # 🔥 FIX DEAD FREETYPE MIRROR
-              sed -i '
-                  s#http://.*freetype.*2\.6\.1.*#'"$FREETYPE_URL"'#g
-              ' "$FREETYPE_RULES"
-              
-              echo "🔧 FFmpeg + freetype patches applied successfully."
-  
-              # -------------------------------------------------------
-              # 5) Now build tools (full compile after patch)
-              # -------------------------------------------------------
-              pushd vlc/extras/tools
-              
-              # -------------------------------------------------------
-              # 🔥 FIX: Patch dead GNU FTP links for autotools
-              # -------------------------------------------------------
-              echo "🔧 Applying patches for dead GNU FTP links..."
-              TOOLS_MAK="tools.mak"
-              sed -i 's#http://ftp.gnu.org/gnu#https://ftpmirror.gnu.org#g' "$TOOLS_MAK"
-              echo "🔧 Patches applied to $TOOLS_MAK."
-              # -------------------------------------------------------
-  
-              make -j"$(nproc)"
-              popd
-              #############################################################
-              # FIX 2: Now run *VLC real build* which uses Tizen cross GCC
-              #############################################################
-              echo "🔨 Building VLC (tizen)..."
-  
-              export TARGET_CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-              export TARGET_CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-  
-              ./buildall.sh -a armv7l
-  
-              echo "📦 Packaging VLC WGT..."
-              expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
-  
-              cp -r ./*.wgt "$GITHUB_WELCOM_WORKSPACE/wgt_files/" 2>/dev/null || true
-  
-            ###################################################
-            #               ALL OTHER WEB PROJECTS
-            ###################################################
-            else
-              echo "🌐 Standard web build for $repo_name..."
-  
-              "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-              "$TIZEN_PATH/tools/ide/bin/tizen" package -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
+            # Proper sdk.version (some scripts source this file!)
+            if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
+              printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
+              chmod +x "$TIZEN_SDK/sdk.version"
+              echo "📄 Created sdk.version script"
             fi
-  
-        # ---------------------------------------------------
-        # Upload WGTS from this repo build
-        # ---------------------------------------------------
-        - name: Upload WGTS to release
-          uses: softprops/action-gh-release@v2
-          with:
-            tag_name: "community-${{ github.run_number }}"
-            name: "Community Packages ${{ github.run_number }}"
-            files: "wgt_files/*.wgt"
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          
+
+            echo "🔧 Preparing environment..."
+
+            # Ensure Tizen cross compiler is in PATH for buildall.sh ONLY
+            export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+
+            #############################################################
+            # FIX 1: Build VLC extras/tools using HOST system GCC
+            # BUT force compatibility with old VLC toolchain (C++03)
+            #############################################################
+            echo "🔧 Prebuilding VLC tools (native GCC, C++03)..."
             
-  publish-release:
-    runs-on: ubuntu-latest
-    needs: tizen-build
-    steps:
-      - name: Download all WGT artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-wgts
+            # -------------------------------------------------------
+            # 1) Clone VLC if missing
+            # -------------------------------------------------------
+            if [[ ! -d vlc ]]; then
+              git clone https://code.videolan.org/videolan/vlc.git vlc
+              pushd vlc
+              git checkout 4e0fa1b
+              popd
+            fi
+            
+            # -------------------------------------------------------
+            # 2) Ensure toolchain permissions
+            # -------------------------------------------------------
+            echo "🔧 Making toolchain executable..."
+            chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+            chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
+            
+            # -------------------------------------------------------
+            # 3) Build extras/tools with HOST GCC
+            # -------------------------------------------------------
+            pushd vlc/extras/tools
+            export CC=gcc
+            export CXX=g++
+            export CFLAGS="-std=gnu11"
+            export CXXFLAGS="-std=gnu++03 -Wno-deprecated-declarations"
+            export LDFLAGS=""
+            export CPPFLAGS=""
+            
+            echo "🔧 Bootstrapping extras/tools..."
+            ./bootstrap
+            
+            # If bootstrap regenerated contrib files, patch AFTER this
+            popd
+            
+            echo "🔧 Applying VLC contrib patches (FFmpeg + freetype)…"
+            
+            RULES="vlc/contrib/src/ffmpeg/rules.mak"
+            FREETYPE_RULES="vlc/contrib/src/freetype2/rules.mak"
+            
+            FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+            FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
+            
+            # Ensure contrib directories exist
+            mkdir -p vlc/contrib/tarballs/
+            
+            # -------------------------------------------------------
+            # 🔥 FIX FAILED FFMPEG GIT CLONE
+            # -------------------------------------------------------
+            
+            # This is the new, working command for the Makefile rule.
+            # Note: It must be indented with a TAB for the Makefile.
+            NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
+            
+            # Use sed to find the line containing the broken 'git clone' 
+            # command and replace it entirely with our new curl-based command.
+            # <--- THIS IS THE MODIFIED LINE
+            sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD && git clone/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
+            
+            # 🔥 FIX DEAD FREETYPE MIRROR
+            sed -i '
+                s#http://.*freetype.*2\.6\.1.*#'"$FREETYPE_URL"'#g
+            ' "$FREETYPE_RULES"
+            
+            echo "🔧 FFmpeg + freetype patches applied successfully."
 
-      - name: List downloaded files
-        run: ls -R release-wgts || echo "No WGT files found"
+            # -------------------------------------------------------
+            # 5) Now build tools (full compile after patch)
+            # -------------------------------------------------------
+            pushd vlc/extras/tools
+            
+            # -------------------------------------------------------
+            # 🔥 FIX: Patch dead GNU FTP links for autotools
+            # -------------------------------------------------------
+            echo "🔧 Applying patches for dead GNU FTP links..."
+            TOOLS_MAK="tools.mak"
+            sed -i 's#http://ftp.gnu.org/gnu#https://ftpmirror.gnu.org#g' "$TOOLS_MAK"
+            echo "🔧 Patches applied to $TOOLS_MAK."
+            # -------------------------------------------------------
 
-      - name: Create GitHub Release with all WGTS
+            make -j"$(nproc)"
+            popd
+            #############################################################
+            # FIX 2: Now run *VLC real build* which uses Tizen cross GCC
+            #############################################################
+            echo "🔨 Building VLC (tizen)..."
+
+            export TARGET_CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+            export TARGET_CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+
+            ./buildall.sh -a armv7l
+
+            echo "📦 Packaging VLC WGT..."
+            expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
+
+            cp -r ./*.wgt "$GITHUB_WELCOM_WORKSPACE/wgt_files/" 2>/dev/null || true
+
+          ###################################################
+          #               ALL OTHER WEB PROJECTS
+          ###################################################
+          else
+            echo "🌐 Standard web build for $repo_name..."
+
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
+            "$TIZEN_PATH/tools/ide/bin/tizen" package -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
+          fi
+
+      # ---------------------------------------------------
+      # Upload WGTS from this repo build
+      # ---------------------------------------------------
+      - name: Upload WGTS to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "community-${{ github.run_number }}"
           name: "Community Packages ${{ github.run_number }}"
-          files: "release-wgts/**/*.wgt"
+          files: "wgt_files/*.wgt"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
