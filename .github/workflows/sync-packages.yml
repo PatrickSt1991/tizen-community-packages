@@ -193,12 +193,9 @@ jobs:
             SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
             echo "🔧 Using sysroot: $SYSROOT"
 
-            # Proper sdk.version: a small shell script returning 4.0
+            # Proper sdk.version: safe YAML-proof version
             if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
-              cat > "$TIZEN_SDK/sdk.version" << 'EOF'
-              #!/bin/sh
-              echo 4.0
-              EOF
+              printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
               chmod +x "$TIZEN_SDK/sdk.version"
               echo "📄 Created sdk.version script"
             fi
