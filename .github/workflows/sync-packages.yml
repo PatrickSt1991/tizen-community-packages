@@ -268,11 +268,12 @@ jobs:
             
             # This is the new, working command for the Makefile rule.
             # Note: It must be indented with a TAB for the Makefile.
-            NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
             
-            # Use sed to find the line containing 'git.libav.org' and
-            # replace it entirely with our new command.
-            sed -i "/rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD && git clone/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
+            # 🔥 FIX FAILED FFMPEG GIT CLONE
+            NEW_FFMPEG_COMMAND="\tTEMP_DIR=../../contrib/tarballs/ffmpeg-HEAD; rm -Rf \$\$TEMP_DIR; mkdir -p \$\$TEMP_DIR; curl -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C \$\$TEMP_DIR; (cd ../../contrib/tarballs/ && tar cvJ ffmpeg-HEAD) > ../../contrib/tarballs/ffmpeg-HEAD.tar.xz; rm -Rf \$\$TEMP_DIR"
+
+            # Replace the broken git clone rule
+            sed -i "/^rm -Rf \.\.\/\.\.\/contrib\/tarballs\/ffmpeg-HEAD/c\\${NEW_FFMPEG_COMMAND}" "$RULES"
             
             # 🔥 FIX DEAD FREETYPE MIRROR
             sed -i '
