@@ -271,8 +271,11 @@ jobs:
               # ---------------- VLC-specific ----------------
               ["live.2015.06.24.tar.gz"]="https://downloads.videolan.org/pub/contrib/live555/live.2015.06.24.tar.gz"
             
-              # ---------------- FFmpeg override ----------------
+              # ---------------- Overrides ----------------
               ["ffmpeg-HEAD.tar.xz"]="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+              ["libmodplug-0.8.8.5.tar.gz"]="https://download.videolan.org/contrib/modplug/libmodplug-0.8.8.5.tar.gz"
+              ["nettle-2.7.1.tar.gz"]="https://download.videolan.org/contrib/nettle/nettle-2.7.1.tar.gz"
+
             )
             
             echo "⬇️ Pre-seeding tarballs..."
