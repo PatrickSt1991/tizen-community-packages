@@ -64,12 +64,28 @@ jobs:
              "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           rm -rf "${WORKDIR}/data" "${WORKDIR}/rootstrap.zip"
 
-          # Toolchain
-          TOOLCHAIN_ZIP="cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
-          curl -L -o "${WORKDIR}/toolchain.zip" "$BASE_URL/$TOOLCHAIN_ZIP"
-          unzip -o "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/"
-          mv "${WORKDIR}/data/tools/arm-linux-gnueabi-gcc-4.9" "${WORKDIR}/tools/"
-          rm -rf "${WORKDIR}/data" "${WORKDIR}/toolchain.zip"
+          # Toolchain (REPLACEMENT: clean official GCC 4.9)
+          echo "🧹 Removing old/bad toolchain..."
+          rm -rf "${WORKDIR}/tools/arm-linux-gnueabi-gcc-4.9" || true
+          
+          TOOLCHAIN_URL="https://download.tizen.org/sdk/tizenstudio/official/binary/cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
+          
+          echo "⬇️ Downloading clean ARM gcc-4.9 toolchain..."
+          curl -L -o "${WORKDIR}/toolchain.zip" "$TOOLCHAIN_URL"
+          
+          echo "📦 Extracting..."
+          unzip -q "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/tools-tmp"
+          
+          echo "🔧 Installing toolchain..."
+          mv "${WORKDIR}/tools-tmp/data/tools/arm-linux-gnueabi-gcc-4.9" \
+             "${WORKDIR}/tools/arm-linux-gnueabi-gcc-4.9"
+          
+          echo "🧼 Cleanup..."
+          rm -rf "${WORKDIR}/tools-tmp" "${WORKDIR}/toolchain.zip"
+          
+          echo "✔ Toolchain installed:"
+          ls -l "${WORKDIR}/tools/arm-linux-gnueabi-gcc-4.9/bin"
+
 
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
