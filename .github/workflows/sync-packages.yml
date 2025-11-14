@@ -266,7 +266,7 @@ jobs:
               ["gmp-6.0.0.tar.bz2"]="https://download.videolan.org/contrib/gmp/gmp-6.0.0.tar.bz2"
               ["libiconv-1.14.tar.gz"]="https://ftp.gnu.org/gnu/libiconv/libiconv-1.14.tar.gz"
               ["libxml2-2.9.2.tar.gz"]="http://xmlsoft.org/sources/libxml2-2.9.2.tar.gz"
-              ["jpegsrc.v9a.tar.gz"]="https://ijg.org/files/jpegsrc.v9a.tar.gz"
+              ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
             
               # ---------------- VLC-specific ----------------
               ["live.2015.06.24.tar.gz"]="https://downloads.videolan.org/pub/contrib/live555/live.2015.06.24.tar.gz"
