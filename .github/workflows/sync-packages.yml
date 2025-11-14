@@ -52,17 +52,7 @@ jobs:
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         run: |
           set -e
-          BASE_URL="https://download.tizen.org/sdk/tizenstudio/official/binary"
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
-
-          # Rootstrap
-          ROOTSTRAP_ZIP="mobile-4.0-rs-device.core_0.0.47_ubuntu-64.zip"
-          curl -L -o "${WORKDIR}/rootstrap.zip" "$BASE_URL/$ROOTSTRAP_ZIP"
-          unzip -o "${WORKDIR}/rootstrap.zip" -d "${WORKDIR}/"
-          mkdir -p "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps"
-          mv "${WORKDIR}/data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core" \
-             "${WORKDIR}/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          rm -rf "${WORKDIR}/data" "${WORKDIR}/rootstrap.zip"
 
           # Toolchain (REPLACEMENT: clean official GCC 4.9)
           echo "🧹 Removing old/bad toolchain..."
