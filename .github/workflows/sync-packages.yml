@@ -360,6 +360,37 @@ jobs:
           chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9"
                     
           echo "🚧 Starting VLC compilation..."
+          
+          # Force contrib to expose real failing contrib
+          export VERBOSE=1
+          export V=1
+          export MAKEFLAGS="-j1"
+          
+          # Force contrib NOT to pick up forbidden host include paths
+          export CCACHE_DISABLE=1
+          unset CCACHE_DIR
+          unset CPATH
+          unset C_INCLUDE_PATH
+          unset CPLUS_INCLUDE_PATH
+          unset LIBRARY_PATH
+          
+          # Freeze sysroot so contrib can't wander off into host dirs
+          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+          export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+          
+          # Make sure the Tizen toolchain is the ONLY toolchain
+          export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+
+          echo "Patching contrib bootstrap options..."
+          export VLC_CONTRIB_ARGS="--disable-schroedinger --disable-mad --disable-projectm --disable-upnp --disable-swscale"
+          
+          pushd vlc/contrib
+          echo 'append_args() { for a in $VLC_CONTRIB_ARGS; do set -- "$@" "$a"; done; printf "%s\n" "$@"; exit; }' > append.sh
+          chmod +x append.sh
+          
+          sed -i '1i\set -- $(./append.sh "$@")' bootstrap
+          popd
+          
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
           
