@@ -319,16 +319,17 @@ jobs:
           export CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
           export CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
           
-          # Do NOT let contrib auto-inject bad flags from env
+          # Clean environment so contrib sets flags correctly
           unset CPPFLAGS
           unset CFLAGS
           unset CXXFLAGS
           unset LDFLAGS
           
-          # Correct way to pass sysroot + standards to VLC contrib
-          export EXTRA_CFLAGS="--sysroot=$SYSROOT -std=gnu11"
-          export EXTRA_CXXFLAGS="--sysroot=$SYSROOT -std=gnu++11"
-          export EXTRA_LDFLAGS="--sysroot=$SYSROOT"
+          # ONLY pass the C/C++ standard — nothing else
+          export EXTRA_CFLAGS="-std=gnu11"
+          export EXTRA_CXXFLAGS="-std=gnu++11"
+          export EXTRA_LDFLAGS=""
+
           
           echo "🔧 Fixing lost permissions in the Tizen GCC toolchain..."
           chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
