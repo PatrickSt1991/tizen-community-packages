@@ -316,21 +316,25 @@ jobs:
           # Build VLC for Tizen
           # -----------------------------------------------------
           
-          # CC and CXX MUST NOT contain --sysroot
           export CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
           export CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
+          
+          # Do NOT let contrib auto-inject bad flags from env
+          unset CPPFLAGS
+          unset CFLAGS
+          unset CXXFLAGS
+          unset LDFLAGS
+          
+          # Correct way to pass sysroot + standards to VLC contrib
+          export EXTRA_CFLAGS="--sysroot=$SYSROOT -std=gnu11"
+          export EXTRA_CXXFLAGS="--sysroot=$SYSROOT -std=gnu++11"
+          export EXTRA_LDFLAGS="--sysroot=$SYSROOT"
           
           echo "🔧 Fixing lost permissions in the Tizen GCC toolchain..."
           chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
           chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
           chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9"
-          
-          # FORCE MODERN C/C++ STANDARD (critical fix for libogg + autoconf 2.71)
-          export CPPFLAGS="--sysroot=$SYSROOT"
-          export CFLAGS="--sysroot=$SYSROOT -std=gnu11"
-          export CXXFLAGS="--sysroot=$SYSROOT -std=gnu++11"
-          export LDFLAGS="--sysroot=$SYSROOT"
-          
+                    
           echo "🚧 Starting VLC compilation..."
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — detecting failing contrib modules"
