@@ -255,9 +255,8 @@ jobs:
             download "libgcrypt-1.6.2.tar.bz2"  "https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.6.2.tar.bz2"
             download "libgpg-error-1.18.tar.bz2" "https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.18.tar.bz2"
             download "gnutls-3.2.21.tar.xz"     "https://gnupg.org/ftp/gcrypt/gnutls/v3.2/gnutls-3.2.21.tar.xz"
-            
             download "flac-1.3.1.tar.xz"        "https://downloads.xiph.org/releases/flac/flac-1.3.1.tar.xz"
-            
+           
             echo "✅ All contrib tarballs are pre-seeded."
 
             
@@ -284,6 +283,8 @@ jobs:
               ["gmp-6.0.0.tar.bz2"]="https://ftp.gnu.org/gnu/gmp/gmp-6.0.0a.tar.bz2"
               ["flac-1.3.1.tar.xz"]="https://downloads.xiph.org/releases/flac/flac-1.3.1.tar.xz"
               ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
+              ["libiconv-1.14.tar.gz"]="https://mirrors.ocf.berkeley.edu/gnu/libiconv/libiconv-1.14.tar.gz"
+              ["libtasn1-3.7.tar.gz"]="https://mirrors.ocf.berkeley.edu/gnu/libtasn1/libtasn1-3.7.tar.gz"
             )
             
             echo "⬇️ Pre-seeding tarballs..."
