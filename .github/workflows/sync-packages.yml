@@ -316,22 +316,38 @@ jobs:
           # -----------------------------------------------------
           # Build VLC for Tizen
           # -----------------------------------------------------
+          echo "🧹 Removing previous contrib build (avoids poisoned include paths)..."
+          rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
+
+          echo "🔧 Cleaning entire build environment (fix poisoning)..."
+          
+          # Remove everything VLC/Contrib could have cached
+          unset PKG_CONFIG_PATH
+          unset PKG_CONFIG_LIBDIR
+          unset PKG_CONFIG_SYSROOT_DIR
+          
+          unset CPPFLAGS
+          unset CFLAGS
+          unset CXXFLAGS
+          unset LDFLAGS
+          
+          unset EXTRA_CFLAGS
+          unset EXTRA_CXXFLAGS
+          unset EXTRA_LDFLAGS
+          
+          # Remove host includes that GCC might auto-insert
+          unset CPATH
+          unset C_INCLUDE_PATH
+          unset CPLUS_INCLUDE_PATH
+          unset LIBRARY_PATH
           
           export CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
           export CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
 
           # Clean environment so contrib sets flags correctly
-          unset CPPFLAGS
-          unset CFLAGS
-          unset CXXFLAGS
-          unset LDFLAGS
-          unset EXTRA_CFLAGS
-          unset EXTRA_CXXFLAGS
-          unset EXTRA_LDFLAGS
-          export HOST=arm-linux-gnueabi
           export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
-          export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
-          export PKG_CONFIG_PATH="$PKG_CONFIG_LIBDIR"
+          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
 
           
           echo "🔧 Fixing lost permissions in the Tizen GCC toolchain..."
