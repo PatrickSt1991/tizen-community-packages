@@ -214,6 +214,64 @@ jobs:
               popd
             fi
 
+            #############################################################
+            # 🔥 INSERT CONTRIB SCANNER HERE
+            #############################################################
+            echo "📦 Extracting ALL VLC contrib download metadata..."
+
+            OUTFILE="$GITHUB_WORKSPACE/contrib_sources.json"
+            CONTRIB_SRC="vlc/contrib/src"
+
+            echo "[" > "$OUTFILE"
+            first=1
+
+            find "$CONTRIB_SRC" -type f -name "rules.mak*" | while read -r RULE; do
+                pkg=$(basename "$(dirname "$RULE")")
+                urls=$(grep -Eo '(https?|ftp)://[^") >]+' "$RULE" | sort -u)
+                archives=$(grep -Eo '[A-Za-z0-9._-]+\.tar\.(gz|bz2|xz)' "$RULE" | sort -u)
+                sha=$(find "$(dirname "$RULE")" -maxdepth 1 -name "SHA512SUMS" -print -quit)
+
+                [ $first -eq 0 ] && echo "," >> "$OUTFILE"
+                first=0
+
+                echo "  {" >> "$OUTFILE"
+                echo "    \"package\": \"${pkg}\"," >> "$OUTFILE"
+                echo "    \"rules_file\": \"${RULE}\"," >> "$OUTFILE"
+
+                echo -n "    \"urls\": [" >> "$OUTFILE"
+                first_url=1
+                for u in $urls; do
+                    [ $first_url -eq 0 ] && echo -n ", " >> "$OUTFILE"
+                    first_url=0
+                    echo -n "\"$u\"" >> "$OUTFILE"
+                done
+                echo "]," >> "$OUTFILE"
+
+                echo -n "    \"archives\": [" >> "$OUTFILE"
+                first_arc=1
+                for a in $archives; do
+                    [ $first_arc -eq 0 ] && echo -n ", " >> "$OUTFILE"
+                    first_arc=0
+                    echo -n "\"$a\"" >> "$OUTFILE"
+                done
+                echo "]," >> "$OUTFILE"
+
+                if [[ -n "$sha" ]]; then
+                    echo "    \"sha512sum_file\": \"${sha}\"" >> "$OUTFILE"
+                else
+                    echo "    \"sha512sum_file\": null" >> "$OUTFILE"
+                fi
+
+                echo -n "  }" >> "$OUTFILE"
+            done
+
+            echo "]" >> "$OUTFILE"
+            echo "📄 contrib_sources.json generated."
+
+            #############################################################
+            # CONTINUE WITH YOUR PATCH + PRESEED STEPS AFTER THIS
+            #############################################################
+
             ###############################################################
             # Corrected: Pre-seed contrib tarballs with EXACT filenames
             ###############################################################
@@ -348,6 +406,12 @@ jobs:
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$TIZEN_PATH/tools/ide/bin/tizen" package -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
           fi
+
+      - name: Upload contrib_sources.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: contrib-sources
+          path: contrib_sources.json
       
       # ---------------------------------------------------
       # Upload WGTS from this repo build
