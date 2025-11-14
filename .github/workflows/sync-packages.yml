@@ -333,8 +333,23 @@ jobs:
           
           echo "🚧 Starting VLC compilation..."
           ./buildall.sh -a armv7l || {
-              echo "❌ buildall.sh FAILED — dumping config.log files"
-              find vlc/contrib -name config.log -print -exec sh -c 'echo \"--- START ---\"; cat {}; echo \"--- END ---\";' \;
+              echo "❌ buildall.sh FAILED — detecting failing contrib modules"
+
+              FAILED_LOGS=$(grep -RIl "error:" vlc/contrib 2>/dev/null || true)
+
+              if [[ -z "$FAILED_LOGS" ]]; then
+                  echo "⚠ No error inside config.log — failure happened outside contrib."
+              else
+                  echo "🔥 Found failing modules:"
+                  echo "$FAILED_LOGS"
+
+                  for f in $FAILED_LOGS; do
+                      echo "===== ERROR IN: $f ====="
+                      sed -n '1,300p' "$f"
+                      echo "===== END $f ====="
+                  done
+              fi
+              
               exit 1
           }
 
