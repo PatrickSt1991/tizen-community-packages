@@ -403,7 +403,35 @@ jobs:
             vlc/contrib/src/main.mak
           
           echo "✔ contrib/src/main.mak successfully cleaned"
-          
+          echo "🛡 Applying final environment sanitization before contrib rebuild..."
+
+          # ────────────────────────────────────────────────────────────
+          # 1. Remove all host contamination (Samsung DIBS, Ubuntu, etc.)
+          # ────────────────────────────────────────────────────────────
+          unset C_INCLUDE_PATH
+          unset CPLUS_INCLUDE_PATH
+          unset OBJC_INCLUDE_PATH
+          unset OBJCPLUS_INCLUDE_PATH
+          unset CPATH
+          unset LIBRARY_PATH
+
+          # ────────────────────────────────────────────────────────────
+          # 2. Explicitly force ONLY the Tizen sysroot
+          # ────────────────────────────────────────────────────────────
+          export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
+          export CFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
+          export CXXFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
+          export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/usr/lib"
+
+          # ────────────────────────────────────────────────────────────
+          # 3. FORCE contrib modules to use *our* flags (critical!)
+          # ────────────────────────────────────────────────────────────
+          export CONTRIB_CPPFLAGS="$CPPFLAGS"
+          export CONTRIB_CFLAGS="$CFLAGS"
+          export CONTRIB_CXXFLAGS="$CXXFLAGS"
+          export CONTRIB_LDFLAGS="$LDFLAGS"
+
+          echo "✔ Sysroot hard-locked. Samsung DIBS poisoning prevented."
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
           
