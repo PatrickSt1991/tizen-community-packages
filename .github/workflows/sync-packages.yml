@@ -251,7 +251,7 @@ jobs:
             download "fribidi-0.19.7.tar.bz2"   "https://ftp2.osuosl.org/pub/blfs/conglomeration/fribidi/fribidi-0.19.7.tar.bz2"
             
             # 🔥 FIXED — EXACT VLC FILENAMES
-            download "gmp-6.0.0.tar.bz2"        "http://downloads.videolan.org/pub/contrib/gmp-6.0.0.tar.bz2"
+            download "gmp-6.0.0.tar.bz2"        "https://download.videolan.org/contrib/gmp/gmp-6.0.0.tar.bz2"
             download "libgcrypt-1.6.2.tar.bz2"  "https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.6.2.tar.bz2"
             download "libgpg-error-1.18.tar.bz2" "https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.18.tar.bz2"
             download "gnutls-3.2.21.tar.xz"     "https://gnupg.org/ftp/gcrypt/gnutls/v3.2/gnutls-3.2.21.tar.xz"
