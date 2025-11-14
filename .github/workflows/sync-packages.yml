@@ -325,10 +325,10 @@ jobs:
           chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
           chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9"
           
-          # Correct: apply sysroot through FLAGS
+          # FORCE MODERN C/C++ STANDARD (critical fix for libogg + autoconf 2.71)
           export CPPFLAGS="--sysroot=$SYSROOT"
-          export CFLAGS="--sysroot=$SYSROOT"
-          export CXXFLAGS="--sysroot=$SYSROOT"
+          export CFLAGS="--sysroot=$SYSROOT -std=gnu11"
+          export CXXFLAGS="--sysroot=$SYSROOT -std=gnu++11"
           export LDFLAGS="--sysroot=$SYSROOT"
           
           echo "🚧 Starting VLC compilation..."
