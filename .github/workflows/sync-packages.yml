@@ -322,7 +322,12 @@ jobs:
           export CXXFLAGS="--sysroot=$SYSROOT"
           export LDFLAGS="--sysroot=$SYSROOT"
 
-          ./buildall.sh -a armv7l
+          echo "🚧 Starting VLC compilation..."
+          ./buildall.sh -a armv7l || {
+              echo "❌ buildall.sh FAILED — dumping config.log files"
+              find vlc/contrib -name config.log -print -exec sh -c 'echo \"--- START ---\"; cat {}; echo \"--- END ---\";' \;
+              exit 1
+          }
 
           echo "Packaging WGT..."
           expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
