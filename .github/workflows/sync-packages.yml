@@ -285,6 +285,7 @@ jobs:
               ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
               ["libiconv-1.14.tar.gz"]="https://mirrors.ocf.berkeley.edu/gnu/libiconv/libiconv-1.14.tar.gz"
               ["libtasn1-3.7.tar.gz"]="https://mirrors.ocf.berkeley.edu/gnu/libtasn1/libtasn1-3.7.tar.gz"
+              ["libmpeg2-0.5.1.tar.gz"]="https://download.videolan.org/contrib/libmpeg2/libmpeg2-0.5.1.tar.gz"
             )
             
             echo "⬇️ Pre-seeding tarballs..."
