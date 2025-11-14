@@ -214,41 +214,52 @@ jobs:
               popd
             fi
 
-            #############################################################
-            # Step 2 — Patch REAL contrib rules (ffmpeg + freetype)
-            #############################################################
-            echo "🔧 Patching REAL VLC contrib ffmpeg + freetype rules…"
+            ###############################################################
+            # Corrected: Pre-seed contrib tarballs with EXACT filenames
+            ###############################################################
+            echo "📦 PRESEED: Preparing contrib tarballs..."
             
-            FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
-            FREETYPE_URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.6.1.tar.gz"
+            CONTRIB_DIR="vlc/contrib/tarballs"
+            mkdir -p "$CONTRIB_DIR"
             
-            FFMPEG_RULES="$(find vlc/contrib/src/ffmpeg -type f -name 'rules.mak*' | head -n1)"
-            FREETYPE_RULES="$(find vlc/contrib/src/freetype2 -type f -name 'rules.mak*' | head -n1)"
+            download() {
+              local FILE="$1"
+              local URL="$2"
+              if [[ -f "$CONTRIB_DIR/$FILE" ]]; then
+                echo "✔ Cached $FILE"
+              else
+                echo "⬇️ Downloading $FILE"
+                curl -L --fail --retry 4 --retry-delay 3 "$URL" -o "$CONTRIB_DIR/$FILE"
+              fi
+            }
             
-            # Fix legacy libav git references
-            sed -i -E 's#git(\+ssh)?://git\.libav\.org/libav\.git#https://github.com/libav/libav.git#g' "$FFMPEG_RULES" || true
+            # MUST MATCH VLC EXACT FILENAMES
+            download "a52dec-0.7.4.tar.gz"      "https://downloads.videolan.org/pub/contrib/a52dec-0.7.4.tar.gz"
+            download "libass-0.13.0.tar.gz"     "https://github.com/libass/libass/releases/download/0.13.0/libass-0.13.0.tar.gz"
+            download "libdvbpsi-1.3.0.tar.bz2"  "https://downloads.videolan.org/pub/videolan/libdvbpsi/1.3.0/libdvbpsi-1.3.0.tar.bz2"
+            download "libdvdcss-1.3.99.tar.bz2" "https://downloads.videolan.org/pub/videolan/libdvdcss/1.3.99/libdvdcss-1.3.99.tar.bz2"
+            download "libdvdnav-5.0.3.tar.bz2"  "https://downloads.videolan.org/pub/videolan/libdvdnav/5.0.3/libdvdnav-5.0.3.tar.bz2"
+            download "libdvdread-5.0.3.tar.bz2" "https://downloads.videolan.org/pub/videolan/libdvdread/5.0.3/libdvdread-5.0.3.tar.bz2"
+            download "libebml-1.3.3.tar.bz2"    "https://dl.matroska.org/downloads/libebml/libebml-1.3.3.tar.bz2"
             
-            # Override ffmpeg rule
-            printf "\n# --- CI override for ffmpeg-HEAD ---\n" >> "$FFMPEG_RULES"
-            printf '%s\n' \
-            '$(TARBALLS)/ffmpeg-HEAD.tar.xz:' \
-            '	TEMP_DIR=$(TARBALLS)/ffmpeg-HEAD; rm -Rf $$TEMP_DIR; mkdir -p $$TEMP_DIR;' \
-            "	curl -f -L \"$FFMPEG_URL\" | tar xJ --strip-components=1 -C $$TEMP_DIR;" \
-            '	( cd $(TARBALLS) && tar cvJ ffmpeg-HEAD ) > $(TARBALLS)/ffmpeg-HEAD.tar.xz;' \
-            '	rm -Rf $$TEMP_DIR' \
-            >> "$FFMPEG_RULES"
+            # ffmpeg HEAD tarball must match VLC name
+            download "ffmpeg-HEAD.tar.xz"       "https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
             
-            # Override freetype rule
-            if [[ -f "$FREETYPE_RULES" ]]; then
-                sed -i -E "s#https?://[^ ]*freetype[^ ]*2\.6\.1[^ ]*#$FREETYPE_URL#g" "$FREETYPE_RULES" || true
-                printf "\n# --- CI override for freetype 2.6.1 ---\n" >> "$FREETYPE_RULES"
-                printf '%s\n' \
-            '$(TARBALLS)/freetype-2.6.1.tar.gz:' \
-            "	curl -f -L \"$FREETYPE_URL\" > \"\$(TARBALLS)/freetype-2.6.1.tar.gz\"" \
-            >> "$FREETYPE_RULES"
-            fi
+            # freetype must match VLC name
+            download "freetype-2.6.1.tar.gz"    "https://download-mirror.savannah.gnu.org/releases/freetype/freetype-old/freetype-2.6.1.tar.gz"
             
-            echo "✅ Contrib rule patches completed."
+            download "fribidi-0.19.7.tar.bz2"   "https://ftp2.osuosl.org/pub/blfs/conglomeration/fribidi/fribidi-0.19.7.tar.bz2"
+            
+            # 🔥 FIXED — EXACT VLC FILENAMES
+            download "gmp-6.0.0.tar.bz2"        "http://downloads.videolan.org/pub/contrib/gmp-6.0.0.tar.bz2"
+            download "libgcrypt-1.6.2.tar.bz2"  "https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.6.2.tar.bz2"
+            download "libgpg-error-1.18.tar.bz2" "https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.18.tar.bz2"
+            download "gnutls-3.2.21.tar.xz"     "https://gnupg.org/ftp/gcrypt/gnutls/v3.2/gnutls-3.2.21.tar.xz"
+            
+            download "flac-1.3.1.tar.xz"        "https://downloads.xiph.org/releases/flac/flac-1.3.1.tar.xz"
+            
+            echo "✅ All contrib tarballs are pre-seeded."
+
             
             ###############################################################
             # 🔧 FULL PRE-SEEDING OF ALL VLC CONTRIB TARBALLS
