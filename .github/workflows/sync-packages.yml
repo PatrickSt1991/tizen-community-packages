@@ -339,56 +339,57 @@ jobs:
                     
           echo "🚧 Starting VLC compilation..."
           ./buildall.sh -a armv7l || {
-              echo "❌ buildall.sh FAILED — locating the REAL failing contrib module..."
+              echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
           
-              # --------------------------------------------------------------
-              # 1. Detect the contrib module that FAILED (not last successful)
-              # --------------------------------------------------------------
-              # buildall.sh creates:
-              #   .stamp-configure   → when configure succeeds
-              #   .stamp-build       → when make succeeds
-              #
-              # So the failing module is the **one with .stamp-configure
-              # but WITHOUT .stamp-build**.
-              # --------------------------------------------------------------
+              ROOT="vlc/contrib/contrib-tizen-arm-linux-gnueabi"
           
-              FAILED_MODULE=$(find vlc/contrib/contrib-tizen-arm-linux-gnueabi \
-                  -maxdepth 2 \
-                  -name ".stamp-configure" \
-                  | while read cfg; do
-                        MODDIR=$(dirname "$cfg")
-                        [[ ! -f "$MODDIR/.stamp-build" ]] && echo "$MODDIR"
-                    done | head -n 1)
+              # --------------------------------------------------------------------
+              # 1. Detect REAL failing module using stamp logic
+              # --------------------------------------------------------------------
+              FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -name ".stamp-configure" | \
+                  while read f; do
+                      MOD=$(dirname "$f")
+                      if [[ ! -f "$MOD/.stamp-build" ]]; then
+                          echo "$MOD"
+                      fi
+                  done | head -n 1)
           
-              if [[ -n "$FAILED_MODULE" ]]; then
-                  echo "🔥 REAL failing module: $FAILED_MODULE"
-          
-                  # ----------------------------------------------------------
-                  # 2. Show the config.log (if exists)
-                  # ----------------------------------------------------------
-                  if [[ -f "$FAILED_MODULE/config.log" ]]; then
-                      echo "📄 Showing first 200 lines of config.log:"
-                      echo "------------------------------------------------------------"
-                      sed -n '1,200p' "$FAILED_MODULE/config.log"
-                      echo "------------------------------------------------------------"
-                  else
-                      echo "⚠ No config.log present (failure occurred during make, not configure)"
-                  fi
-          
-                  # ----------------------------------------------------------
-                  # 3. Re-run the EXACT failing Makefile target
-                  # ----------------------------------------------------------
-                  echo "🔁 Re-running 'make' inside the real failing module..."
-                  echo "------------------------------------------------------------"
-                  make -C "$FAILED_MODULE" --no-builtin-rules --debug=b || true
-                  echo "------------------------------------------------------------"
-          
-              else
-                  echo "⚠ Could not auto-detect failing module via stamp files."
-                  echo "🔍 Falling back to global error search..."
-                  grep -RIl "error" vlc/contrib/contrib-tizen-arm-linux-gnueabi | head -n 20 || true
+              if [[ -z "$FAILED_MODULE" ]]; then
+                  echo "⚠ Could not find failing module via stamp files — using fallback scan."
+                  FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d \
+                                  ! -name ".*" | sort | head -n 1)
               fi
           
+              echo "🔥 REAL failing module: $FAILED_MODULE"
+          
+              # --------------------------------------------------------------------
+              # 2. Dump config.log if present
+              # --------------------------------------------------------------------
+              if [[ -f "$FAILED_MODULE/config.log" ]]; then
+                  echo ""
+                  echo "📄 Showing FIRST 200 lines of config.log:"
+                  echo "------------------------------------------------------------"
+                  sed -n '1,200p' "$FAILED_MODULE/config.log" || true
+          
+                  echo ""
+                  echo "📄 Showing LAST 200 lines of config.log:"
+                  echo "------------------------------------------------------------"
+                  tail -n 200 "$FAILED_MODULE/config.log" || true
+              else
+                  echo "⚠ config.log does NOT exist — meaning configure failed before writing it."
+              fi
+          
+              # --------------------------------------------------------------------
+              # 3. Re-run make with full debug output
+              # --------------------------------------------------------------------
+              echo ""
+              echo "🔁 Re-running make inside $FAILED_MODULE"
+              echo "------------------------------------------------------------"
+          
+              make -C "$FAILED_MODULE" V=1 --debug=b || true
+          
+              echo "------------------------------------------------------------"
+              echo "❌ Stopping build — module above is the ACTUAL failing part."
               exit 1
           }
 
