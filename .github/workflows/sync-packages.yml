@@ -335,8 +335,20 @@ jobs:
             #############################################################
             echo "🔨 Building VLC (tizen)…"
 
-            export TARGET_CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-            export TARGET_CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+            echo "🔧 Setting cross compiler flags..."
+            
+            export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+            
+            export CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
+            export CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
+            
+            export CPPFLAGS="--sysroot=$SYSROOT"
+            export CFLAGS="--sysroot=$SYSROOT"
+            export CXXFLAGS="--sysroot=$SYSROOT"
+            export LDFLAGS="--sysroot=$SYSROOT"
+            
+            echo "✔ Cross toolchain configured"
+
 
             ./buildall.sh -a armv7l
 
