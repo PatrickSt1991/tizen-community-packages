@@ -199,15 +199,15 @@ jobs:
           echo "Building VLC-Tizen..."
 
           # ----------------------------------------------
-          # 🧩 CACHE: contrib/tarballs
+          # 🧩 CACHE: VLC contrib & extras/tools
           # ----------------------------------------------
           - name: Restore VLC contrib cache
             id: vlc-contrib-cache
             uses: actions/cache@v4
             with:
               path: |
-                vlc/contrib/tarballs
-                vlc/extras/tools
+                build/vlc-tizen/vlc/contrib/tarballs
+                build/vlc-tizen/vlc/extras/tools
               key: vlc-contrib-cache-4e0fa1b
 
           echo "Using Tizen SDK..."
