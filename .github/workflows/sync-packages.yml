@@ -390,6 +390,33 @@ jobs:
           
           sed -i '1i\set -- $(./append.sh "$@")' bootstrap
           popd
+
+          echo "Patching contrib to remove Samsung DIBS hardcoded include paths..."
+          
+          patch -p1 << 'EOF'
+          diff --git a/contrib/src/main.mak b/contrib/src/main.mak
+          index 4cb8c9c..b919c75 100644
+          --- a/contrib/src/main.mak
+          +++ b/contrib/src/main.mak
+          @@ -247,16 +247,6 @@ CPPFLAGS += -I\$(PREFIX)/include
+           CFLAGS   += -I\$(PREFIX)/include
+           CXXFLAGS += -I\$(PREFIX)/include
+          
+          -# --------------------------------------------------------------------
+          -# Samsung DIBS internal SDK paths (break external builds)
+          -# These originate from Samsung's internal CI environment and DO NOT
+          -# exist on GitHub runners, causing GCC to emit permission errors:
+          -#
+          -#   cc1: error: /root/.dibs/... Permission denied
+          -#
+          -# Remove these to avoid poisoning the compiler.
+          -CPPFLAGS += -I/root/.dibs/srib-dibs-builder-s42-u64/workspace/jobs/3504/buildRoot/rs-devel_glibc-2.20.armv7l/usr/include
+          -CFLAGS   += -I/root/.dibs/srib-dibs-builder-s42-u64/workspace/jobs/3504/buildRoot/rs-devel_glibc-2.20.armv7l/usr/include
+          
+           LDFLAGS  += -L\$(PREFIX)/lib
+          
+          EOF
+
           
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
