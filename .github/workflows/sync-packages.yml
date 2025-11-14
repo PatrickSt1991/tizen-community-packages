@@ -339,26 +339,59 @@ jobs:
                     
           echo "🚧 Starting VLC compilation..."
           ./buildall.sh -a armv7l || {
-                        echo "❌ buildall.sh FAILED. Finding last-worked-on package..."
-                        
-                        # Find the directory of the most recently modified config.log
-                        # We use find ... -name config.log | xargs ls -t ... to get the most recent one
-                        LAST_PKG_DIR=$(find vlc/contrib/contrib-tizen-arm-linux-gnueabi -name config.log | xargs ls -t | head -n 1 | xargs dirname)
-                        
-                        if [[ -n "$LAST_PKG_DIR" ]]; then
-                          echo "🔥 Last package configured was in: $LAST_PKG_DIR"
-                          echo "🔥 This package likely failed during 'make'. Re-running 'make' to capture the error..."
-                          
-                          # Re-run make *in that directory*. This will fail again, but print the *real* error.
-                          # We use 'make -C' to specify the directory.
-                          make -C "$LAST_PKG_DIR"
-                          
-                        else
-                          echo "🤷 Could not find a config.log. Failure may be in the main build."
-                        fi
-                        
-                        exit 1
-                    }
+              echo "❌ buildall.sh FAILED — locating the REAL failing contrib module..."
+          
+              # --------------------------------------------------------------
+              # 1. Detect the contrib module that FAILED (not last successful)
+              # --------------------------------------------------------------
+              # buildall.sh creates:
+              #   .stamp-configure   → when configure succeeds
+              #   .stamp-build       → when make succeeds
+              #
+              # So the failing module is the **one with .stamp-configure
+              # but WITHOUT .stamp-build**.
+              # --------------------------------------------------------------
+          
+              FAILED_MODULE=$(find vlc/contrib/contrib-tizen-arm-linux-gnueabi \
+                  -maxdepth 2 \
+                  -name ".stamp-configure" \
+                  | while read cfg; do
+                        MODDIR=$(dirname "$cfg")
+                        [[ ! -f "$MODDIR/.stamp-build" ]] && echo "$MODDIR"
+                    done | head -n 1)
+          
+              if [[ -n "$FAILED_MODULE" ]]; then
+                  echo "🔥 REAL failing module: $FAILED_MODULE"
+          
+                  # ----------------------------------------------------------
+                  # 2. Show the config.log (if exists)
+                  # ----------------------------------------------------------
+                  if [[ -f "$FAILED_MODULE/config.log" ]]; then
+                      echo "📄 Showing first 200 lines of config.log:"
+                      echo "------------------------------------------------------------"
+                      sed -n '1,200p' "$FAILED_MODULE/config.log"
+                      echo "------------------------------------------------------------"
+                  else
+                      echo "⚠ No config.log present (failure occurred during make, not configure)"
+                  fi
+          
+                  # ----------------------------------------------------------
+                  # 3. Re-run the EXACT failing Makefile target
+                  # ----------------------------------------------------------
+                  echo "🔁 Re-running 'make' inside the real failing module..."
+                  echo "------------------------------------------------------------"
+                  make -C "$FAILED_MODULE" --no-builtin-rules --debug=b || true
+                  echo "------------------------------------------------------------"
+          
+              else
+                  echo "⚠ Could not auto-detect failing module via stamp files."
+                  echo "🔍 Falling back to global error search..."
+                  grep -RIl "error" vlc/contrib/contrib-tizen-arm-linux-gnueabi | head -n 20 || true
+              fi
+          
+              exit 1
+          }
+
 
           echo "Packaging WGT..."
           expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
