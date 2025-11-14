@@ -315,16 +315,22 @@ jobs:
           # -----------------------------------------------------
           # Build VLC for Tizen
           # -----------------------------------------------------
-          # Inject sysroot directly into the compiler invocation
-          export CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-          export CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
           
-          # These *must not* override sysroot incorrectly in contrib
-          unset CPPFLAGS
-          unset CFLAGS
-          unset CXXFLAGS
-          unset LDFLAGS
-
+          # CC and CXX MUST NOT contain --sysroot
+          export CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
+          export CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
+          
+          echo "🔧 Fixing lost permissions in the Tizen GCC toolchain..."
+          chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/libexec"
+          chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9"
+          
+          # Correct: apply sysroot through FLAGS
+          export CPPFLAGS="--sysroot=$SYSROOT"
+          export CFLAGS="--sysroot=$SYSROOT"
+          export CXXFLAGS="--sysroot=$SYSROOT"
+          export LDFLAGS="--sysroot=$SYSROOT"
+          
           echo "🚧 Starting VLC compilation..."
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — dumping config.log files"
