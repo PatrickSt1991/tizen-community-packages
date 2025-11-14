@@ -275,7 +275,7 @@ jobs:
               ["ffmpeg-HEAD.tar.xz"]="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
               ["libmodplug-0.8.8.5.tar.gz"]="https://download.videolan.org/contrib/modplug/libmodplug-0.8.8.5.tar.gz"
               ["nettle-2.7.1.tar.gz"]="https://download.videolan.org/contrib/nettle/nettle-2.7.1.tar.gz"
-
+              ["openjpeg-1.5.0.tar.gz"]="https://download.videolan.org/contrib/openjpeg/openjpeg-1.5.0.tar.gz"
             )
             
             echo "⬇️ Pre-seeding tarballs..."
