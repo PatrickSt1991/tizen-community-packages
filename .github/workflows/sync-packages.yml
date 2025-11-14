@@ -169,6 +169,18 @@ jobs:
             protobuf-compiler build-essential pkg-config \
             automake autoconf libtool libtool-bin gettext
 
+      # ----------------------------------------------
+      # 🧩 CACHE: VLC contrib & extras/tools
+      # ----------------------------------------------
+      - name: Restore VLC contrib cache
+        id: vlc-contrib-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/vlc-tizen/vlc/contrib/tarballs
+            build/vlc-tizen/vlc/extras/tools
+          key: vlc-contrib-cache-4e0fa1b
+
       - name: Clone and build project
         shell: bash
         env:
@@ -197,18 +209,6 @@ jobs:
           #               VLC-TIZEN BUILD PATH
           # ------------------------------------------------------
           echo "Building VLC-Tizen..."
-
-          # ----------------------------------------------
-          # 🧩 CACHE: VLC contrib & extras/tools
-          # ----------------------------------------------
-          - name: Restore VLC contrib cache
-            id: vlc-contrib-cache
-            uses: actions/cache@v4
-            with:
-              path: |
-                build/vlc-tizen/vlc/contrib/tarballs
-                build/vlc-tizen/vlc/extras/tools
-              key: vlc-contrib-cache-4e0fa1b
 
           echo "Using Tizen SDK..."
           SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
