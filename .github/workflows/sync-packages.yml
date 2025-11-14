@@ -339,25 +339,20 @@ jobs:
                     
           echo "🚧 Starting VLC compilation..."
           ./buildall.sh -a armv7l || {
-              echo "❌ buildall.sh FAILED — detecting failing contrib modules"
-
-              FAILED_LOGS=$(grep -RIl "error:" vlc/contrib 2>/dev/null || true)
-
-              if [[ -z "$FAILED_LOGS" ]]; then
-                  echo "⚠ No error inside config.log — failure happened outside contrib."
-              else
-                  echo "🔥 Found failing modules:"
-                  echo "$FAILED_LOGS"
-
-                  for f in $FAILED_LOGS; do
-                      echo "===== ERROR IN: $f ====="
-                      sed -n '1,300p' "$f"
-                      echo "===== END $f ====="
-                  done
-              fi
-              
-              exit 1
-          }
+                        echo "❌ buildall.sh FAILED. Finding last modified config.log..."
+                        
+                        # Find the most recently modified config.log and print its tail
+                        CONFIG_LOG=$(find vlc/contrib -name config.log | xargs ls -t | head -n 1)
+                        
+                        if [[ -n "$CONFIG_LOG" ]]; then
+                          echo "🔥 Displaying last 100 lines of $CONFIG_LOG:"
+                          tail -n 100 "$CONFIG_LOG"
+                        else
+                          echo "🤷 Could not find a config.log. Failure may be in the main build."
+                        fi
+                        
+                        exit 1
+                    }
 
           echo "Packaging WGT..."
           expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
