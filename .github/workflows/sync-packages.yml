@@ -212,7 +212,15 @@ jobs:
 
           echo "Using Tizen SDK..."
           SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          echo "🔧 Using sysroot: $SYSROOT"
 
+          # Proper sdk.version (some scripts source this file!)
+          if [[ ! -f "$TIZEN_SDK/sdk.version" ]]; then
+            printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
+            chmod +x "$TIZEN_SDK/sdk.version"
+            echo "📄 Created sdk.version script"
+          fi
+          
           export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
 
           # Clone VLC source
