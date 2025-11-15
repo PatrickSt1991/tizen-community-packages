@@ -373,7 +373,29 @@ jobs:
           mkdir -p "$TARGET_DIR"
           cd "$TARGET_DIR"
           
-          echo "🔧 bootstrapping contrib..."
+          echo "🔧 Fixing Tizen detection…"
+          
+          export TIZEN_SDK="$TIZEN_PATH"
+          export TIZEN_ABI=armv7l
+          
+          export BUILD=x86_64-linux-gnu
+          export HOST=arm-linux-gnueabi
+          export TARGET=arm-linux-gnueabi
+          
+          export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          
+          # Force GCC to trigger Tizen detection inside bootstrap
+          export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT -DTIZEN -DTIZEN_BUILD"
+          export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT -DTIZEN -DTIZEN_BUILD"
+          
+          echo "🧪 Checking bootstrap CC detection:"
+          $CC -v || true
+          
+          echo "🔧 Running contrib bootstrap inside correct directory…"
+          
+          mkdir -p vlc/contrib/contrib-tizen-arm-linux-gnueabi
+          cd vlc/contrib/contrib-tizen-arm-linux-gnueabi
+          
           ../bootstrap --host=$HOST --build=$BUILD
           
           echo "🔧 building contribs..."
