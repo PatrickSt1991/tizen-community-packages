@@ -236,26 +236,50 @@ jobs:
             exit 0
           fi
 
-          # ------------------------------------------------------
-          #               VLC-TIZEN BUILD PATH
-          # ------------------------------------------------------
-          echo "Building VLC-Tizen..."
-
-          echo "Using Tizen SDK..."
+          ###############################################
+          # locate sysroot
+          ###############################################
           export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
 
-          echo "🔧 Using sysroot: $SYSROOT"
+          ###############################################
+          # locate GCC 4.9 toolchain
+          ###############################################
+          export GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
+          if [[ -z "$GCC49_DIR" ]]; then
+              echo "❌ GCC 4.9 toolchain NOT FOUND!"
+              exit 1
+          fi
 
-          echo "🔧 Forcing correct Tizen SDK version..."
-          printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
-          chmod +x "$TIZEN_SDK/sdk.version"
-          
-          export TIZEN_SDK_VERSION=4.0
-          export TIZEN_SDK_ROOT="$TIZEN_SDK"
-          
-          
-          
-          # Clone VLC source
+          export PATH="$GCC49_DIR/bin:$PATH"
+
+          ###############################################
+          # cross environment
+          ###############################################
+          export BUILD=x86_64-linux-gnu
+          export HOST=arm-linux-gnueabi
+          export TARGET=arm-linux-gnueabi
+
+          export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
+
+          export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc"
+          export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++"
+          export AR="$GCC49_DIR/bin/arm-linux-gnueabi-ar"
+          export RANLIB="$GCC49_DIR/bin/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC49_DIR/bin/arm-linux-gnueabi-strip"
+          export LD="$GCC49_DIR/bin/arm-linux-gnueabi-ld"
+
+          export CFLAGS="$SYSFLAGS -fPIC"
+          export CXXFLAGS="$CFLAGS"
+          export CPPFLAGS="$SYSFLAGS"
+          export LDFLAGS="$SYSFLAGS"
+
+          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
+
+          ###############################################
+          # VLC source download
+          ###############################################
           if [[ ! -d vlc ]]; then
             git clone https://code.videolan.org/videolan/vlc.git vlc
             pushd vlc
@@ -263,15 +287,14 @@ jobs:
             popd
           fi
 
-          # --------------------------------------------------
-          # Pre-seed contrib tarballs (will use cached files)
-          # --------------------------------------------------
+          ###############################################
+          # contrib tarballs (cached)
+          ###############################################
           CONTRIB_DIR="vlc/contrib/tarballs"
           mkdir -p "$CONTRIB_DIR"
 
           download() {
-            [[ -f "$CONTRIB_DIR/$1" ]] && { echo "✔ Cached $1"; return; }
-            echo "⬇️ Downloading $1"
+            [[ -f "$CONTRIB_DIR/$1" ]] && return
             curl -L --fail --retry 4 --retry-delay 2 "$2" -o "$CONTRIB_DIR/$1"
           }
 
@@ -329,176 +352,53 @@ jobs:
             ["zvbi-0.2.35.tar.bz2"]="https://download.videolan.org/contrib/zvbi/zvbi-0.2.35.tar.bz2"
           )
 
-          for F in "${!PKG_URLS[@]}"; do
-            download "$F" "${PKG_URLS[$F]}"
-          done
+          for F in "${!PKG_URLS[@]}"; do download "$F" "${PKG_URLS[$F]}"; done
 
-          # ---------------------------------------------
-          # Build extras/tools unless cached
-          # ---------------------------------------------
+          ###############################################
+          # build extras/tools
+          ###############################################
           if [[ "${{ steps.vlc-contrib-cache.outputs.cache-hit }}" != "true" ]]; then
-            pushd vlc/extras/tools
-            ./bootstrap
-            make -j"$(nproc)"
-            popd
-          else
-            echo "✔ Using cached extras/tools"
+              pushd vlc/extras/tools
+              ./bootstrap
+              make -j"$(nproc)"
+              popd
           fi
 
-          
-          # -----------------------------------------------------
-          # Build VLC for Tizen (fixed cross-compile setup)
-          # -----------------------------------------------------
-          echo "🧹 Removing previous contrib build (avoids poisoned include paths)..."
-          rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
-
-          echo "🔧 Cleaning entire build environment (fix poisoning)..."
-
-          # Remove all host contamination
-          unset PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR
-          unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
-          unset EXTRA_CFLAGS EXTRA_CXXFLAGS EXTRA_LDFLAGS
-          unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH
-          unset OBJC_INCLUDE_PATH OBJCPLUS_INCLUDE_PATH
-
-          echo "🔧 Re-enforcing correct SYSROOT after cleanup"
-          export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          
-          # Reapply sysroot flags
-          export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
-          export CPPFLAGS="$SYSFLAGS"
-          export CFLAGS="$SYSFLAGS"
-          export CXXFLAGS="$SYSFLAGS"
-          export LDFLAGS="$SYSFLAGS"
-          
-          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
-          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
-          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
-
-          # ─────────────────────────────────────────────
-          # 1. Define proper cross-compile triplets
-          # ─────────────────────────────────────────────
-          export BUILD=x86_64-linux-gnu
-          export HOST=arm-linux-gnueabi
-          export TARGET=arm-linux-gnueabi
-
-          # ─────────────────────────────────────────────
-          # 2. Hard-define toolchain binaries
-          # ─────────────────────────────────────────────
-          # Locate the actual GCC 4.9 toolchain (installed via package manager)
-          export GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
-
-          if [[ -z "$GCC49_DIR" ]]; then
-              echo "❌ ERROR: GCC 4.9 toolchain not found inside Tizen SDK!"
-              find "$TIZEN_SDK/tools" -maxdepth 5 -type d -print
-              exit 1
-          fi
-
-          echo "✔ Using GCC 4.9 toolchain at: $GCC49_DIR"
-
-          echo "🔧 Sanitizing PATH from invalid toolchains..."
-          PATH="$(echo "$PATH" | tr ':' '\n' | grep -v 'arm-linux-gnueabi-gcc-4.9' | tr '\n' ':')"
-
-          echo "🛠 Final PATH:"
-          echo "$PATH"
-
-          export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-          export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-          export AR="$GCC49_DIR/bin/arm-linux-gnueabi-ar"
-          export RANLIB="$GCC49_DIR/bin/arm-linux-gnueabi-ranlib"
-          export STRIP="$GCC49_DIR/bin/arm-linux-gnueabi-strip"
-          export LD="$GCC49_DIR/bin/arm-linux-gnueabi-ld"
-
-          chmod -R +x "$GCC49_DIR"
-
-          # ─────────────────────────────────────────────
-          # 3. Sysroot locking (global)
-          # ─────────────────────────────────────────────
-          export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
-          export CPPFLAGS="$SYSFLAGS"
-          export CFLAGS="$SYSFLAGS"
-          export CXXFLAGS="$SYSFLAGS"
-          export LDFLAGS="$SYSFLAGS"
-
-          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
-          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
-          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
-
-          # ─────────────────────────────────────────────
-          # 4. Contrib: force cross compile args
-          # ─────────────────────────────────────────────
-          export CONFIGURE_FLAGS="--host=$HOST --build=$BUILD --target=$TARGET"
-          export VLC_CONTRIB_ARGS="$CONFIGURE_FLAGS --disable-schroedinger --disable-mad --disable-projectm --disable-upnp --disable-swscale"
-
+          ###############################################
+          # build contribs (clean cross-compile)
+          ###############################################
           pushd vlc/contrib
-          echo 'append_args() { for a in $VLC_CONTRIB_ARGS; do set -- "$@" "$a"; done; printf "%s\n" "$@"; exit; }' > append.sh
-          chmod +x append.sh
-          sed -i '1i\set -- $(./append.sh "$@")' bootstrap
+
+          echo "🔧 bootstrapping contrib..."
+          ./bootstrap --host=$HOST --build=$BUILD
+
+          echo "🔧 building contribs..."
+          ./buildall.sh -a armv7l
+
           popd
-          # --- Fix append.sh not found inside contrib submodules ---
-          echo "📌 Replicating append.sh for all contrib modules so bootstrap can reach it"
-          
-          cp -f vlc/contrib/append.sh vlc/contrib/src/ || true
-          find vlc/contrib/src -maxdepth 2 -type d -exec cp -f vlc/contrib/append.sh {} \; || true
-          
-          echo "✔ append.sh copied to all contrib subdirectories"
 
-          # ─────────────────────────────────────────────
-          # 5. Patch contrib build system to enforce cross flags
-          # ─────────────────────────────────────────────
-          sed -i '1i CONFIGURE += $(CONFIGURE_FLAGS)' vlc/contrib/src/main.mak
-          sed -i '1i CONFIGURE_FLAGS='"$CONFIGURE_FLAGS"'' vlc/contrib/src/main.mak
+          ###############################################
+          # configure + build VLC
+          ###############################################
+          mkdir -p vlc/build-tizen
+          pushd vlc/build-tizen
 
-          # prevent running test binaries (e.g., jpeg)
-          sed -i 's/$(CC) conftest.c/echo "Skipping execution test"/' vlc/contrib/src/jpeg/rules.mak
-          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/jpeg/rules.mak
+          ../configure \
+            --host=$HOST \
+            --build=$BUILD \
+            --disable-skins2 \
+            --disable-projectm \
+            --disable-upnp \
+            --enable-freetype \
+            --enable-fribidi \
+            --with-sysroot="$SYSROOT"
 
-          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/fribidi/rules.mak
-          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/gettext/rules.mak || true
+          make -j1
+          popd
 
-          echo "🛡 Environment fully sanitized. Starting contrib build…"
-
-          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
-
-          ./buildall.sh -a armv7l || {
-              echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
-
-              ROOT="vlc/contrib/contrib-tizen-arm-linux-gnueabi"
-
-              FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -name ".stamp-configure" | \
-                  while read f; do
-                      MOD=$(dirname "$f")
-                      if [[ ! -f "$MOD/.stamp-build" ]]; then
-                          echo "$MOD"
-                      fi
-                  done | head -n 1)
-
-              if [[ -z "$FAILED_MODULE" ]]; then
-                  echo "⚠ Could not detect failing module via stamps — fallback."
-                  FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d ! -name ".*" | head -n 1)
-              fi
-
-              echo "🔥 REAL failing module: $FAILED_MODULE"
-
-              if [[ -f "$FAILED_MODULE/config.log" ]]; then
-                  echo "📄 FIRST 200 lines:"
-                  sed -n '1,200p' "$FAILED_MODULE/config.log"
-
-                  echo "📄 LAST 200 lines:"
-                  tail -n 200 "$FAILED_MODULE/config.log"
-              else
-                  echo "⚠ No config.log (configure died before writing)"
-              fi
-
-              echo "🔁 Re-running make in failing module with full debug"
-              make -C "$FAILED_MODULE" V=1 --debug=b || true
-
-              echo "❌ Stopping build."
-              exit 1
-          }
-
-
-          echo "Packaging WGT..."
+          ###############################################
+          # package WGT
+          ###############################################
           expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
           cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
 
