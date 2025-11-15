@@ -48,6 +48,16 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
+      - name: List all available Tizen packages
+        if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "🔍 Running package-manager-cli.bin show-pkgs --tree"
+          chmod +x tizen-studio/package-manager/package-manager-cli.bin
+          tizen-studio/package-manager/package-manager-cli.bin show-pkgs --tree || true
+
+          echo "🔍 Checking repository metadata files"
+          find tizen-studio -maxdepth 5 -type f -name "*.xml" -print || true
+
       - name: Install Tizen 4.0 Rootstrap and Toolchain
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         run: |
