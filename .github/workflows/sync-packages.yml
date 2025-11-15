@@ -50,17 +50,6 @@ jobs:
           # Set execute permissions for all tools in tizen-studio
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Set TIZEN_SDK environment variable
-        run: |
-          export TIZEN_SDK="${GITHUB_WORKSPACE}/tizen-studio"
-          echo "🔧 TIZEN_SDK set to: $TIZEN_SDK"
-      
-      - name: Force correct Tizen SDK version
-        run: |
-          echo "🔧 Forcing correct Tizen SDK version..."
-          echo "4.0" > "$TIZEN_SDK/sdk.version"
-          chmod +x "$TIZEN_SDK/sdk.version"
-
       - name: Install Tizen 4.0 rootstrap (0.0.62)
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         run: |
@@ -239,6 +228,14 @@ jobs:
             set -e
             mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
             cd build
+
+            # Ensure correct permissions for the Tizen SDK folder
+            sudo chmod -R u+w "$TIZEN_SDK"
+        
+            # Force correct Tizen SDK version
+            echo "🔧 Forcing correct Tizen SDK version..."
+            echo "4.0" > "$TIZEN_SDK/sdk.version"
+            chmod +x "$TIZEN_SDK/sdk.version"
   
             git clone --depth 1 --branch "${{ matrix.branch }}" \
               "https://github.com/${{ matrix.repo }}.git"
