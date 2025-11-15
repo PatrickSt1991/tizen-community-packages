@@ -63,7 +63,7 @@ jobs:
 
           echo "📁 Moving rootstrap into final SDK path..."
           mkdir -p platforms/tizen-4.0/mobile/rootstraps/
-          rsync -av data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-rs-device.core \
+          rsync -av data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core \
             platforms/tizen-4.0/mobile/rootstraps/
 
           echo "🧹 Cleaning..."
@@ -97,7 +97,7 @@ jobs:
       - name: Debug rootstrap + toolchain
         run: |
           echo "🔍 Checking installed rootstrap:"
-          find tizen-studio/platforms -maxdepth 5 -type d -name "mobile-4.0-rs-device.core"
+          find tizen-studio/platforms -maxdepth 5 -type d -name "mobile-4.0-device.core"
 
           echo "🔍 Checking GCC 4.9 binaries:"
           find tizen-studio/tools -maxdepth 4 -type f -name "arm-linux-gnueabi-gcc"
@@ -242,7 +242,7 @@ jobs:
           echo "Building VLC-Tizen..."
 
           echo "Using Tizen SDK..."
-          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-rs-device.core"
+          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           echo "🔧 Using sysroot: $SYSROOT"
 
           echo "🔧 Forcing correct Tizen SDK version..."
