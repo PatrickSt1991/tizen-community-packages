@@ -396,7 +396,11 @@ jobs:
 
           echo "✔ Using GCC 4.9 toolchain at: $GCC49_DIR"
 
-          export PATH="$GCC49_DIR/bin:$PATH"
+          echo "🔧 Sanitizing PATH from invalid toolchains..."
+          PATH="$(echo "$PATH" | tr ':' '\n' | grep -v 'arm-linux-gnueabi-gcc-4.9' | tr '\n' ':')"
+
+          echo "🛠 Final PATH:"
+          echo "$PATH"
 
           export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
           export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
@@ -431,6 +435,13 @@ jobs:
           chmod +x append.sh
           sed -i '1i\set -- $(./append.sh "$@")' bootstrap
           popd
+          # --- Fix append.sh not found inside contrib submodules ---
+          echo "📌 Replicating append.sh for all contrib modules so bootstrap can reach it"
+          
+          cp -f vlc/contrib/append.sh vlc/contrib/src/ || true
+          find vlc/contrib/src -maxdepth 2 -type d -exec cp -f vlc/contrib/append.sh {} \; || true
+          
+          echo "✔ append.sh copied to all contrib subdirectories"
 
           # ─────────────────────────────────────────────
           # 5. Patch contrib build system to enforce cross flags
