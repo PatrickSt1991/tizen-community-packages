@@ -328,6 +328,10 @@ jobs:
           for F in "${!PKG_URLS[@]}"; do
             download "$F" "${PKG_URLS[$F]}"
           done
+          
+          echo "🔧 Patching libass FREETYPE_CFLAGS include path…"
+          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I${PREFIX}/include/freetype2 |' \
+              vlc/contrib/src/ass/rules.mak
 
           # ---------------------------------------------
           # Build extras/tools unless cached
@@ -399,12 +403,13 @@ jobs:
           # ─────────────────────────────────────────────
           # 3. Sysroot locking (global)
           # ─────────────────────────────────────────────
-          export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
-          export CPPFLAGS="$SYSFLAGS"
-          export CFLAGS="$SYSFLAGS"
-          export CXXFLAGS="$SYSFLAGS"
-          export LDFLAGS="$SYSFLAGS"
-
+          export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+          export AR="$TOOLBIN/arm-linux-gnueabi-ar"
+          export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
+          export LD="$TOOLBIN/arm-linux-gnueabi-ld"
+          export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
+          
           export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
           export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
           export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
