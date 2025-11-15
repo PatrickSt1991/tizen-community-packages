@@ -369,19 +369,22 @@ jobs:
           # ─────────────────────────────────────────────
           # 2. Hard-define toolchain binaries
           # ─────────────────────────────────────────────
-          echo "🔍 Locating GCC 4.9 toolchain..."
-          GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
+          echo "🔍 Locating GCC 4.9 toolchain…"
+          
+          GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type f -name "arm-linux-gnueabi-gcc" | head -n 1)
           
           if [[ -z "$GCC49_DIR" ]]; then
-              echo "❌ GCC 4.9 toolchain NOT FOUND in tizen-studio/tools!"
-              find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "*gcc*" -print
+              echo "❌ GCC executable not found!"
+              find "$TIZEN_SDK/tools" -maxdepth 6 -print | grep gcc
               exit 1
           fi
           
-          TOOLBIN="$GCC49_DIR/bin"
-          echo "✔ Found GCC toolchain: $TOOLBIN"
+          TOOLBIN=$(dirname "$GCC49_DIR")
           
-          chmod -R +x "$GCC49_DIR"
+          echo "✔ GCC found at: $TOOLBIN"
+          
+          chmod -R +x "$(dirname "$TOOLBIN")"
+          
           export PATH="$TOOLBIN:$PATH"
           
           export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
@@ -390,6 +393,7 @@ jobs:
           export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
           export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
           export LD="$TOOLBIN/arm-linux-gnueabi-ld"
+
 
 
           # ─────────────────────────────────────────────
@@ -412,11 +416,18 @@ jobs:
           export VLC_CONTRIB_ARGS="$CONFIGURE_FLAGS --disable-schroedinger --disable-mad --disable-projectm --disable-upnp --disable-swscale"
 
           pushd vlc/contrib
-          echo 'append_args() { for a in $VLC_CONTRIB_ARGS; do set -- "$@" "$a"; done; printf "%s\n" "$@"; exit; }' > append.sh
-          chmod +x append.sh
-          sed -i '1i\set -- $(./append.sh "$@")' bootstrap
+          
+          ./bootstrap \
+              --host=$HOST \
+              --build=$BUILD \
+              --disable-projectm \
+              --disable-upnp \
+              --disable-schroedinger \
+              --disable-mad \
+              --disable-swscale
+          
           popd
-
+          
           # ─────────────────────────────────────────────
           # 5. Patch contrib build system to enforce cross flags
           # ─────────────────────────────────────────────
