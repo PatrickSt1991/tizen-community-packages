@@ -242,7 +242,8 @@ jobs:
           echo "Building VLC-Tizen..."
 
           echo "Using Tizen SDK..."
-          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+
           echo "🔧 Using sysroot: $SYSROOT"
 
           echo "🔧 Forcing correct Tizen SDK version..."
@@ -360,6 +361,20 @@ jobs:
           unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH
           unset OBJC_INCLUDE_PATH OBJCPLUS_INCLUDE_PATH
 
+          echo "🔧 Re-enforcing correct SYSROOT after cleanup"
+          export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          
+          # Reapply sysroot flags
+          export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
+          export CPPFLAGS="$SYSFLAGS"
+          export CFLAGS="$SYSFLAGS"
+          export CXXFLAGS="$SYSFLAGS"
+          export LDFLAGS="$SYSFLAGS"
+          
+          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
+
           # ─────────────────────────────────────────────
           # 1. Define proper cross-compile triplets
           # ─────────────────────────────────────────────
@@ -371,7 +386,7 @@ jobs:
           # 2. Hard-define toolchain binaries
           # ─────────────────────────────────────────────
           # Locate the actual GCC 4.9 toolchain (installed via package manager)
-          export GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 3 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
+          export GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
 
           if [[ -z "$GCC49_DIR" ]]; then
               echo "❌ ERROR: GCC 4.9 toolchain not found inside Tizen SDK!"
