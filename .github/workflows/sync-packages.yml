@@ -54,35 +54,21 @@ jobs:
           set -e
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
-          echo "🧹 Removing any cached old/broken toolchain..."
-          rm -rf "$WORKDIR/tools/arm-linux-gnueabi-gcc-4.9" || true
-
-          echo "📦 Installing Tizen MOBILE 4.0 rootstrap (headless mode)..."
+          echo "📦 Installing Tizen MOBILE 4.0 rootstrap (WebAppDevelopment-CLI)..."
           "$WORKDIR/package-manager/package-manager.bin" \
-              install MOBILE-4.0-NativeAppDevelopment-CLI \
-              --accept-license --no-plugins --cli --platform linux
-          
-          echo "📦 Installing ARM GCC 4.9 toolchain (headless mode)..."
+            install "MOBILE-4.0-WebAppDevelopment-CLI" \
+            --accept-license
+
+          echo "📦 Installing GCC 4.9 toolchain..."
           "$WORKDIR/package-manager/package-manager.bin" \
-              install NativeToolchain-Gcc-4.9 \
-              --accept-license --no-plugins --cli --platform linux
+            install "NativeToolchain-Gcc-4.9" \
+            --accept-license
 
+          echo "🔍 Checking toolchain directory..."
+          find "$WORKDIR/tools" -maxdepth 3 -name "arm-linux-gnueabi-gcc-4.9" -print
 
-          echo "🔍 Locating installed toolchain..."
-          TOOLCHAIN_DIR=$(find "$WORKDIR/tools" -maxdepth 2 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
-
-          if [[ -z "$TOOLCHAIN_DIR" ]]; then
-            echo "❌ ERROR: ARM GCC toolchain NOT found!"
-            exit 1
-          fi
-
-          echo "✔ Toolchain installed at: $TOOLCHAIN_DIR"
-          echo "--- gcc binaries ---"
-          ls -l "$TOOLCHAIN_DIR/bin"
-
-          echo "--- checking cc1 & cc1plus ---"
-          find "$TOOLCHAIN_DIR" -name cc1 -print
-          find "$TOOLCHAIN_DIR" -name cc1plus -print
+          echo "🔍 Checking 4.0 rootstrap directory..."
+          find "$WORKDIR/platforms" -maxdepth 4 -name "mobile-4.0-device.core" -print
 
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
