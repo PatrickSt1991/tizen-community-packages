@@ -46,7 +46,20 @@ jobs:
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
+          
+          # Set execute permissions for all tools in tizen-studio
           chmod -R +x tizen-studio/tools/ide/bin
+
+      - name: Set TIZEN_SDK environment variable
+        run: |
+          export TIZEN_SDK="${GITHUB_WORKSPACE}/tizen-studio"
+          echo "🔧 TIZEN_SDK set to: $TIZEN_SDK"
+      
+      - name: Force correct Tizen SDK version
+        run: |
+          echo "🔧 Forcing correct Tizen SDK version..."
+          printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
+          chmod +x "$TIZEN_SDK/sdk.version"
 
       - name: Install Tizen 4.0 rootstrap (0.0.62)
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
@@ -195,13 +208,7 @@ jobs:
           with:
             name: package-exp-artifact
             path: .
-
-        - name: Create Tizen sdk.version file
-          run: |
-            echo "🔧 Forcing correct Tizen SDK version..."
-            printf '#!/bin/sh\necho 4.0\n' > "tizen-studio/sdk.version"
-            chmod +x "tizen-studio/sdk.version"
-  
+            
         - name: Install VLC prerequisites
           run: |
             sudo apt-get update
@@ -294,9 +301,6 @@ jobs:
             if [[ ! -d vlc ]]; then
               git clone https://code.videolan.org/videolan/vlc.git vlc
               git -C vlc checkout 4e0fa1b
-              #
-              # <<< ❌ BUGGY 'popd' REMOVED FROM HERE ❌
-              #
             fi
   
             ###############################################
@@ -310,6 +314,7 @@ jobs:
               curl -L --fail --retry 4 --retry-delay 2 "$2" -o "$CONTRIB_DIR/$1"
             }
   
+
             declare -A PKG_URLS=(
               ["a52dec-0.7.4.tar.gz"]="https://downloads.videolan.org/pub/contrib/a52dec-0.7.4.tar.gz"
               ["libass-0.13.0.tar.gz"]="https://downloads.videolan.org/testing/contrib/ass/libass-0.13.0.tar.gz"
@@ -376,34 +381,12 @@ jobs:
                 popd
             fi
   
-            #
-            # <<< ❌ CONFLICTING "FINAL FIXED VERSION" BLOCK REMOVED ❌
-            #
-            # The variable exports from the "cross environment"
-            # section above are correct and will be used.
-            #
-  
-            #
-            # <<< ❌ REDUNDANT PWD/CD BLOCKS REMOVED ❌
-            #
-            # The script is already in the correct directory
-            # ('build/vlc-tizen') to run buildall.sh
-            #
-  
             ###############################################
-            # RUN BUILDALL
+            # Run buildall.sh
             ###############################################
-            
             echo "📌 Running buildall.sh"
             chmod +x ./buildall.sh
             ./buildall.sh -a armv7l
-  
-            #
-            # <<< ❌ BUGGY 'popd' REMOVED FROM HERE ❌
-            #
-            # This was the end of the script in the original file,
-            # but a 'popd' was here which was also incorrect.
-            #
   
             ###############################################
             # configure + build VLC
