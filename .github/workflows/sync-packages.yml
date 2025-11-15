@@ -329,8 +329,9 @@ jobs:
             download "$F" "${PKG_URLS[$F]}"
           done
           
-          echo "🔧 Patching libass FREETYPE_CFLAGS include path…"
-          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I${PREFIX}/include/freetype2 |' \
+          echo "🔧 Overriding libass FREETYPE_CFLAGS (full replace)…"
+          
+          sed -i 's|^FREETYPE_CFLAGS *=.*$|FREETYPE_CFLAGS = -I$$(PREFIX)/include/freetype2|' \
               vlc/contrib/src/ass/rules.mak
 
           # ---------------------------------------------
