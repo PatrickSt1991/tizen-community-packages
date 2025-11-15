@@ -58,7 +58,7 @@ jobs:
       - name: Force correct Tizen SDK version
         run: |
           echo "🔧 Forcing correct Tizen SDK version..."
-          printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
+          echo "4.0" > "$TIZEN_SDK/sdk.version"
           chmod +x "$TIZEN_SDK/sdk.version"
 
       - name: Install Tizen 4.0 rootstrap (0.0.62)
