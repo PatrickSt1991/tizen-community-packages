@@ -368,15 +368,8 @@ jobs:
           # build contribs properly (FINAL FIXED VERSION)
           ###############################################
           
-          echo "🔧 Entering VLC contrib directory…"
-          cd vlc/contrib
-          
-          # Clean any previous corrupted build
-          rm -rf tizen
-          mkdir tizen
-          cd tizen
-          
           echo "🔧 Setting Tizen cross variables…"
+          
           export TIZEN_SDK="$TIZEN_PATH"
           export TIZEN_ABI=armv7l
           
@@ -386,7 +379,6 @@ jobs:
           
           export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           
-          # ensure toolchain is executable
           chmod -R +x "$GCC49_DIR" || true
           
           export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT -DTIZEN"
@@ -395,13 +387,16 @@ jobs:
           echo "🧪 Checking GCC:"
           $CC -v || true
           
-          echo "📌 Running contrib bootstrap (correct path)…"
-          ../bootstrap --build=$BUILD --host=$HOST
+          ###############################################
+          # Return to vlc-tizen repo root
+          ###############################################
           
-          echo "🔧 Building contribs…"
-          make list
+          cd ..   # <-- THIS IS THE CORRECT FIX
+          
+          echo "📌 Running VLC-Tizen buildall.sh"
+          chmod +x ./buildall.sh
           ./buildall.sh -a armv7l
-          
+
           popd
 
           ###############################################
