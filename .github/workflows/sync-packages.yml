@@ -429,11 +429,18 @@ jobs:
           sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/fribidi/rules.mak
           sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/gettext/rules.mak || true
           
-          sed -i 's|$(shell $(PKGCONFIG) freetype2 --cflags)|-I$(PREFIX)/include/freetype2|g' \
+          FREETYPE_DIR="$PWD/vlc/contrib/arm-linux-gnueabi/include/freetype2"
+          
+          echo "🔧 Patching FREETYPE_CFLAGS (absolute path)"
+          sed -i "s|FREETYPE_CFLAGS=.*|FREETYPE_CFLAGS=\"-I${FREETYPE_DIR}\"|" \
+              vlc/contrib/src/ass/rules.mak
+          
+          FRIBIDI_DIR="$PWD/vlc/contrib/arm-linux-gnueabi/include"
+          
+          echo "🔧 Patching FRIBIDI_CFLAGS (absolute path)"
+          sed -i "s|FRIBIDI_CFLAGS=.*|FRIBIDI_CFLAGS=\"-I${FRIBIDI_DIR}/fribidi\"|" \
               vlc/contrib/src/ass/rules.mak
 
-          sed -i 's|$(shell $(PKGCONFIG) fribidi --cflags)|-I$(PREFIX)/include/fribidi|g' \
-              vlc/contrib/src/ass/rules.mak
 
           echo "🛡 Environment fully sanitized. Starting contrib build…"
 
