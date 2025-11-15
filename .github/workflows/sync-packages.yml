@@ -365,16 +365,21 @@ jobs:
           fi
 
           ###############################################
-          # build contribs (clean cross-compile)
+          # build contribs properly
           ###############################################
           pushd vlc/contrib
-
+          
+          TARGET_DIR="contrib-$HOST"
+          mkdir -p "$TARGET_DIR"
+          cd "$TARGET_DIR"
+          
           echo "🔧 bootstrapping contrib..."
-          ./bootstrap --host=$HOST --build=$BUILD
-
+          ../bootstrap --host=$HOST --build=$BUILD
+          
           echo "🔧 building contribs..."
-          ./buildall.sh -a armv7l
-
+          make list
+          ../build.sh -a armv7l
+          
           popd
 
           ###############################################
