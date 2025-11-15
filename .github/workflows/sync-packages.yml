@@ -329,14 +329,6 @@ jobs:
             download "$F" "${PKG_URLS[$F]}"
           done
           
-          echo "🔧 Hard-forcing libass include paths…"
-          
-          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I${PREFIX}/include/freetype2 \ |' \
-              vlc/contrib/src/ass/rules.mak
-          
-          sed -i 's|FRIBIDI_CFLAGS="|FRIBIDI_CFLAGS="-I${PREFIX}/include/fribidi \ |' \
-              vlc/contrib/src/ass/rules.mak
-
           # ---------------------------------------------
           # Build extras/tools unless cached
           # ---------------------------------------------
@@ -436,6 +428,12 @@ jobs:
 
           sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/fribidi/rules.mak
           sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/gettext/rules.mak || true
+          
+          sed -i 's|$(shell $(PKGCONFIG) freetype2 --cflags)|-I$(PREFIX)/include/freetype2|g' \
+              vlc/contrib/src/ass/rules.mak
+
+          sed -i 's|$(shell $(PKGCONFIG) fribidi --cflags)|-I$(PREFIX)/include/fribidi|g' \
+              vlc/contrib/src/ass/rules.mak
 
           echo "🛡 Environment fully sanitized. Starting contrib build…"
 
