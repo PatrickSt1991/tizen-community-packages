@@ -57,11 +57,16 @@ jobs:
           echo "🧹 Removing any cached old/broken toolchain..."
           rm -rf "$WORKDIR/tools/arm-linux-gnueabi-gcc-4.9" || true
 
-          echo "📦 Installing Tizen MOBILE 4.0 rootstrap..."
-          "$WORKDIR/package-manager/package-manager.bin" install MOBILE-4.0-NativeAppDevelopment-CLI
+          echo "📦 Installing Tizen MOBILE 4.0 rootstrap (headless mode)..."
+          "$WORKDIR/package-manager/package-manager.bin" \
+              install MOBILE-4.0-NativeAppDevelopment-CLI \
+              --accept-license --no-plugins --cli --platform linux
+          
+          echo "📦 Installing ARM GCC 4.9 toolchain (headless mode)..."
+          "$WORKDIR/package-manager/package-manager.bin" \
+              install NativeToolchain-Gcc-4.9 \
+              --accept-license --no-plugins --cli --platform linux
 
-          echo "📦 Installing official ARM GCC 4.9 toolchain from Tizen package manager..."
-          "$WORKDIR/package-manager/package-manager.bin" install NativeToolchain-Gcc-4.9
 
           echo "🔍 Locating installed toolchain..."
           TOOLCHAIN_DIR=$(find "$WORKDIR/tools" -maxdepth 2 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
