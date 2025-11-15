@@ -195,6 +195,12 @@ jobs:
           with:
             name: package-exp-artifact
             path: .
+
+        - name: Create Tizen sdk.version file
+          run: |
+            echo "🔧 Forcing correct Tizen SDK version..."
+            printf '#!/bin/sh\necho 4.0\n' > "tizen-studio/sdk.version"
+            chmod +x "tizen-studio/sdk.version"
   
         - name: Install VLC prerequisites
           run: |
