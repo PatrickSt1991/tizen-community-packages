@@ -429,18 +429,26 @@ jobs:
           sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/fribidi/rules.mak
           sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/gettext/rules.mak || true
           
-          FREETYPE_DIR="$PWD/vlc/contrib/arm-linux-gnueabi/include/freetype2"
+          echo "🔧 Disabling AC_TRY_RUN / AC_RUN_IFELSE for cross compile..."
           
-          echo "🔧 Patching FREETYPE_CFLAGS (absolute path)"
-          sed -i "s|FREETYPE_CFLAGS=.*|FREETYPE_CFLAGS=\"-I${FREETYPE_DIR}\"|" \
-              vlc/contrib/src/ass/rules.mak
+          cat << 'EOF' > disable-run.m4
+          AC_DEFUN([AC_TRY_RUN],[
+            AC_MSG_NOTICE([Cross-compile: skipping run test])
+            $[$2]="$3"
+          ])
           
-          FRIBIDI_DIR="$PWD/vlc/contrib/arm-linux-gnueabi/include"
+          AC_DEFUN([AC_RUN_IFELSE],[
+            AC_MSG_NOTICE([Cross-compile: skipping run test])
+            ifelse([$3], , :, [$3])
+          ])
+          EOF
           
-          echo "🔧 Patching FRIBIDI_CFLAGS (absolute path)"
-          sed -i "s|FRIBIDI_CFLAGS=.*|FRIBIDI_CFLAGS=\"-I${FRIBIDI_DIR}/fribidi\"|" \
-              vlc/contrib/src/ass/rules.mak
+          # Autoconf search path
+          mkdir -p vlc/contrib/m4
+          cp disable-run.m4 vlc/contrib/m4/
 
+          export ACLOCAL_PATH="$PWD/vlc/contrib/m4"
+          export AUTOM4TE_SUBDIRS="$PWD/vlc/contrib/m4"
 
           echo "🛡 Environment fully sanitized. Starting contrib build…"
 
