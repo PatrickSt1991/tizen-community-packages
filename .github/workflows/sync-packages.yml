@@ -369,8 +369,21 @@ jobs:
           # ─────────────────────────────────────────────
           # 2. Hard-define toolchain binaries
           # ─────────────────────────────────────────────
-          TOOLBIN="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
-
+          echo "🔍 Locating GCC 4.9 toolchain..."
+          GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
+          
+          if [[ -z "$GCC49_DIR" ]]; then
+              echo "❌ GCC 4.9 toolchain NOT FOUND in tizen-studio/tools!"
+              find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "*gcc*" -print
+              exit 1
+          fi
+          
+          TOOLBIN="$GCC49_DIR/bin"
+          echo "✔ Found GCC toolchain: $TOOLBIN"
+          
+          chmod -R +x "$GCC49_DIR"
+          export PATH="$TOOLBIN:$PATH"
+          
           export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
           export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
           export AR="$TOOLBIN/arm-linux-gnueabi-ar"
@@ -378,9 +391,6 @@ jobs:
           export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
           export LD="$TOOLBIN/arm-linux-gnueabi-ld"
 
-          chmod -R +x "$TOOLBIN"
-
-          export PATH="$TOOLBIN:$PATH"
 
           # ─────────────────────────────────────────────
           # 3. Sysroot locking (global)
