@@ -54,28 +54,30 @@ jobs:
           set -e
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
-          # Toolchain (REPLACEMENT: clean official GCC 4.9)
-          echo "🧹 Removing old/bad toolchain..."
-          rm -rf "${WORKDIR}/tools/arm-linux-gnueabi-gcc-4.9" || true
-          
-          TOOLCHAIN_URL="https://download.tizen.org/sdk/tizenstudio/official/binary/cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip"
-          
-          echo "⬇️ Downloading clean ARM gcc-4.9 toolchain..."
-          curl -L -o "${WORKDIR}/toolchain.zip" "$TOOLCHAIN_URL"
-          
-          echo "📦 Extracting..."
-          unzip -q "${WORKDIR}/toolchain.zip" "data/tools/*" -d "${WORKDIR}/tools-tmp"
-          
-          echo "🔧 Installing toolchain..."
-          mv "${WORKDIR}/tools-tmp/data/tools/arm-linux-gnueabi-gcc-4.9" \
-             "${WORKDIR}/tools/arm-linux-gnueabi-gcc-4.9"
-          
-          echo "🧼 Cleanup..."
-          rm -rf "${WORKDIR}/tools-tmp" "${WORKDIR}/toolchain.zip"
-          
-          echo "✔ Toolchain installed:"
-          ls -l "${WORKDIR}/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          echo "🧹 Removing any cached old/broken toolchain..."
+          rm -rf "$WORKDIR/tools/arm-linux-gnueabi-gcc-4.9" || true
 
+          echo "📦 Installing Tizen MOBILE 4.0 rootstrap..."
+          "$WORKDIR/package-manager/package-manager.bin" install MOBILE-4.0-NativeAppDevelopment-CLI
+
+          echo "📦 Installing official ARM GCC 4.9 toolchain from Tizen package manager..."
+          "$WORKDIR/package-manager/package-manager.bin" install NativeToolchain-Gcc-4.9
+
+          echo "🔍 Locating installed toolchain..."
+          TOOLCHAIN_DIR=$(find "$WORKDIR/tools" -maxdepth 2 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
+
+          if [[ -z "$TOOLCHAIN_DIR" ]]; then
+            echo "❌ ERROR: ARM GCC toolchain NOT found!"
+            exit 1
+          fi
+
+          echo "✔ Toolchain installed at: $TOOLCHAIN_DIR"
+          echo "--- gcc binaries ---"
+          ls -l "$TOOLCHAIN_DIR/bin"
+
+          echo "--- checking cc1 & cc1plus ---"
+          find "$TOOLCHAIN_DIR" -name cc1 -print
+          find "$TOOLCHAIN_DIR" -name cc1plus -print
 
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
@@ -227,7 +229,7 @@ jobs:
           export TIZEN_SDK_VERSION=4.0
           export TIZEN_SDK_ROOT="$TIZEN_SDK"
           
-          export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+          
           
           # Clone VLC source
           if [[ ! -d vlc ]]; then
@@ -319,9 +321,7 @@ jobs:
             echo "✔ Using cached extras/tools"
           fi
 
-          # -----------------------------------------------------
-          # Build VLC for Tizen
-          # -----------------------------------------------------
+          
           # -----------------------------------------------------
           # Build VLC for Tizen (fixed cross-compile setup)
           # -----------------------------------------------------
@@ -347,18 +347,27 @@ jobs:
           # ─────────────────────────────────────────────
           # 2. Hard-define toolchain binaries
           # ─────────────────────────────────────────────
-          TOOLBIN="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          # Locate the actual GCC 4.9 toolchain (installed via package manager)
+          export GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 3 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
 
-          export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-          export AR="$TOOLBIN/arm-linux-gnueabi-ar"
-          export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
-          export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
-          export LD="$TOOLBIN/arm-linux-gnueabi-ld"
+          if [[ -z "$GCC49_DIR" ]]; then
+              echo "❌ ERROR: GCC 4.9 toolchain not found inside Tizen SDK!"
+              find "$TIZEN_SDK/tools" -maxdepth 5 -type d -print
+              exit 1
+          fi
 
-          chmod -R +x "$TOOLBIN"
+          echo "✔ Using GCC 4.9 toolchain at: $GCC49_DIR"
 
-          export PATH="$TOOLBIN:$PATH"
+          export PATH="$GCC49_DIR/bin:$PATH"
+
+          export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+          export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+          export AR="$GCC49_DIR/bin/arm-linux-gnueabi-ar"
+          export RANLIB="$GCC49_DIR/bin/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC49_DIR/bin/arm-linux-gnueabi-strip"
+          export LD="$GCC49_DIR/bin/arm-linux-gnueabi-ld"
+
+          chmod -R +x "$GCC49_DIR"
 
           # ─────────────────────────────────────────────
           # 3. Sysroot locking (global)
