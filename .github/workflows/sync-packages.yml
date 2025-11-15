@@ -388,12 +388,30 @@ jobs:
           $CC -v || true
           
           ###############################################
-          # Return to vlc-tizen repo root
+          # DEBUG WHERE WE ACTUALLY ARE
           ###############################################
           
-          cd ..   # <-- THIS IS THE CORRECT FIX
+          echo "📌 PWD before jumping:"
+          pwd
+          echo "📌 Listing contents:"
+          ls -R .
           
-          echo "📌 Running VLC-Tizen buildall.sh"
+          ###############################################
+          # MOVE TO REAL LOCATION OF buildall.sh
+          ###############################################
+          
+          cd ../vlc-tizen         # ← THIS is the correct fix
+          
+          echo "📌 PWD after jumping:"
+          pwd
+          echo "📌 Listing to confirm buildall.sh is here:"
+          ls -l buildall.sh || echo "❌ buildall.sh NOT FOUND!!"
+          
+          ###############################################
+          # RUN BUILDALL
+          ###############################################
+          
+          echo "📌 Running buildall.sh"
           chmod +x ./buildall.sh
           ./buildall.sh -a armv7l
 
