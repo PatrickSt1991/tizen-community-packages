@@ -365,16 +365,18 @@ jobs:
           fi
 
           ###############################################
-          # build contribs properly
+          # build contribs properly (FINAL FIXED VERSION)
           ###############################################
-          pushd vlc/contrib
           
-          TARGET_DIR="contrib-$HOST"
-          mkdir -p "$TARGET_DIR"
-          cd "$TARGET_DIR"
+          echo "🔧 Entering VLC contrib directory…"
+          cd vlc/contrib
           
-          echo "🔧 Fixing Tizen detection…"
+          # Clean any previous corrupted build
+          rm -rf tizen
+          mkdir tizen
+          cd tizen
           
+          echo "🔧 Setting Tizen cross variables…"
           export TIZEN_SDK="$TIZEN_PATH"
           export TIZEN_ABI=armv7l
           
@@ -384,23 +386,21 @@ jobs:
           
           export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           
-          # Force GCC to trigger Tizen detection inside bootstrap
-          export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT -DTIZEN -DTIZEN_BUILD"
-          export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT -DTIZEN -DTIZEN_BUILD"
+          # ensure toolchain is executable
+          chmod -R +x "$GCC49_DIR" || true
           
-          echo "🧪 Checking bootstrap CC detection:"
+          export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc --sysroot=$SYSROOT -DTIZEN"
+          export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++ --sysroot=$SYSROOT -DTIZEN"
+          
+          echo "🧪 Checking GCC:"
           $CC -v || true
           
-          echo "🔧 Running contrib bootstrap inside correct directory…"
+          echo "📌 Running contrib bootstrap (correct path)…"
+          ../bootstrap --build=$BUILD --host=$HOST
           
-          mkdir -p vlc/contrib/contrib-tizen-arm-linux-gnueabi
-          cd vlc/contrib/contrib-tizen-arm-linux-gnueabi
-          
-          ../bootstrap --host=$HOST --build=$BUILD
-          
-          echo "🔧 building contribs..."
+          echo "🔧 Building contribs…"
           make list
-          ../build.sh -a armv7l
+          ./buildall.sh -a armv7l
           
           popd
 
