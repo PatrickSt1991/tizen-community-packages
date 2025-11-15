@@ -46,8 +46,6 @@ jobs:
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
-          
-          # Set execute permissions for all tools in tizen-studio
           chmod -R +x tizen-studio/tools/ide/bin
 
       - name: Install Tizen 4.0 rootstrap (0.0.62)
@@ -100,13 +98,6 @@ jobs:
 
           echo "✔ GCC 4.9 installed"
 
-      - name: Debug rootstrap + toolchain
-        run: |
-          echo "🔍 Checking installed rootstrap:"
-          find tizen-studio/platforms -maxdepth 5 -type d -name "mobile-4.0-device.core"
-
-          echo "🔍 Checking GCC 4.9 binaries:"
-          find tizen-studio/tools -maxdepth 4 -type f -name "arm-linux-gnueabi-gcc"
 
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
@@ -177,246 +168,311 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   tizen-build:
-      runs-on: ubuntu-latest
-      needs: [prepare, generate-matrix-build]
-  
-      strategy:
-        fail-fast: false
-        matrix:
-          include: ${{ fromJson(needs.generate-matrix-build.outputs.matrix).include }}
-  
-      steps:
-        - uses: actions/checkout@v4
-  
-        - uses: actions/download-artifact@v4
-          with:
-            name: tizen-studio-artifact
-            path: tizen-studio
-  
-        - uses: actions/download-artifact@v4
-          with:
-            name: package-exp-artifact
-            path: .
-            
-        - name: Install VLC prerequisites
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y \
-              help2man ragel nasm yasm meson \
-              protobuf-compiler build-essential pkg-config \
-              automake autoconf libtool libtool-bin gettext
-  
-        # ----------------------------------------------
-        # 🧩 CACHE: VLC contrib & extras/tools
-        # ----------------------------------------------
-        - name: Restore VLC contrib cache
-          id: vlc-contrib-cache
-          uses: actions/cache@v4
-          with:
-            path: |
-              build/vlc-tizen/vlc/contrib/tarballs
-              build/vlc-tizen/vlc/extras/tools
-            key: vlc-contrib-cache-4e0fa1b
-  
-        - name: Clone and build project
-          shell: bash
-          env:
-            TIZEN_SDK: ${{ github.workspace }}/tizen-studio
-            TIZEN_PATH: ${{ github.workspace }}/tizen-studio
-            TIZEN_STUDIO_VER: ${{ env.TIZEN_STUDIO_VER }}
-          run: |
-            set -e
-            mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
-            cd build
+    runs-on: ubuntu-latest
+    needs: [prepare, generate-matrix-build]
 
-            # Ensure correct permissions for the Tizen SDK folder
-            sudo chmod -R u+w "$TIZEN_SDK"
-        
-            # Force correct Tizen SDK version
-            echo "🔧 Forcing correct Tizen SDK version..."
-            echo "4.0" > "$TIZEN_SDK/sdk.version"
-            chmod +x "$TIZEN_SDK/sdk.version"
-  
-            git clone --depth 1 --branch "${{ matrix.branch }}" \
-              "https://github.com/${{ matrix.repo }}.git"
-  
-            cd "$(basename "${{ matrix.repo }}")"
-            repo_name="$(basename "${{ matrix.repo }}")"
-  
-            if [[ "$repo_name" != "vlc-tizen" ]]; then
-              echo "Building standard web project..."
-              "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-              "$TIZEN_PATH/tools/ide/bin/tizen" package \
-                -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
-              exit 0
-            fi
-  
-            ###############################################
-            # locate sysroot
-            ###############################################
-            export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-  
-            ###############################################
-            # locate GCC 4.9 toolchain
-            ###############################################
-            export GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type d -name "arm-linux-gnueabi-gcc-4.9" | head -n 1)
-            if [[ -z "$GCC49_DIR" ]]; then
-                echo "❌ GCC 4.9 toolchain NOT FOUND!"
-                exit 1
-            fi
-  
-            export PATH="$GCC49_DIR/bin:$PATH"
-  
-            ###############################################
-            # cross environment
-            ###############################################
-            export BUILD=x86_64-linux-gnu
-            export HOST=arm-linux-gnueabi
-            export TARGET=arm-linux-gnueabi
-  
-            export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
-  
-            export CC="$GCC49_DIR/bin/arm-linux-gnueabi-gcc"
-            export CXX="$GCC49_DIR/bin/arm-linux-gnueabi-g++"
-            export AR="$GCC49_DIR/bin/arm-linux-gnueabi-ar"
-            export RANLIB="$GCC49_DIR/bin/arm-linux-gnueabi-ranlib"
-            export STRIP="$GCC49_DIR/bin/arm-linux-gnueabi-strip"
-            export LD="$GCC49_DIR/bin/arm-linux-gnueabi-ld"
-  
-            export CFLAGS="$SYSFLAGS -fPIC"
-            export CXXFLAGS="$CFLAGS"
-            export CPPFLAGS="$SYSFLAGS"
-            export LDFLAGS="$SYSFLAGS"
-  
-            export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
-            export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
-            export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
-  
-            ###############################################
-            # VLC source download
-            ###############################################
-            if [[ ! -d vlc ]]; then
-              git clone https://code.videolan.org/videolan/vlc.git vlc
-              git -C vlc checkout 4e0fa1b
-            fi
-  
-            ###############################################
-            # contrib tarballs (cached)
-            ###############################################
-            CONTRIB_DIR="vlc/contrib/tarballs"
-            mkdir -p "$CONTRIB_DIR"
-  
-            download() {
-              [[ -f "$CONTRIB_DIR/$1" ]] && return
-              curl -L --fail --retry 4 --retry-delay 2 "$2" -o "$CONTRIB_DIR/$1"
-            }
-  
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate-matrix-build.outputs.matrix).include }}
 
-            declare -A PKG_URLS=(
-              ["a52dec-0.7.4.tar.gz"]="https://downloads.videolan.org/pub/contrib/a52dec-0.7.4.tar.gz"
-              ["libass-0.13.0.tar.gz"]="https://downloads.videolan.org/testing/contrib/ass/libass-0.13.0.tar.gz"
-              ["libdvbpsi-1.3.0.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvbpsi/1.3.0/libdvbpsi-1.3.0.tar.bz2"
-              ["libdvdcss-1.3.99.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdcss/1.3.99/libdvdcss-1.3.99.tar.bz2"
-              ["libdvdnav-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdnav/5.0.3/libdvdnav-5.0.3.tar.bz2"
-              ["libdvdread-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdread/5.0.3/libdvdread-5.0.3.tar.bz2"
-              ["libebml-1.3.3.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/ebml/libebml-1.3.3.tar.bz2"
-              ["libmatroska-1.4.4.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/matroska/libmatroska-1.4.4.tar.bz2"
-              ["libmad-0.15.1b.tar.gz"]="https://downloads.videolan.org/pub/contrib/libmad-0.15.1b.tar.gz"
-              ["libmpeg2-0.5.1.tar.gz"]="https://download.videolan.org/contrib/libmpeg2/libmpeg2-0.5.1.tar.gz"
-              ["flac-1.3.1.tar.xz"]="https://download.videolan.org/contrib/flac/flac-1.3.1.tar.xz"
-              ["freetype-2.6.1.tar.gz"]="https://download.videolan.org/contrib/freetype2/freetype-2.6.1.tar.gz"
-              ["fribidi-0.19.7.tar.bz2"]="https://download.videolan.org/contrib/fribidi/fribidi-0.19.7.tar.bz2"
-              ["harfbuzz-1.0.6.tar.bz2"]="https://download.videolan.org/pub/contrib/harfbuzz/harfbuzz-1.0.6.tar.bz2"
-              ["gnutls-3.2.21.tar.xz"]="https://downloads.videolan.org/pub/pub/contrib/gnutls/gnutls-3.2.21.tar.xz"
-              ["libtasn1-3.7.tar.gz"]="https://download.videolan.org/pub/pub/contrib/libtasn1/libtasn1-3.7.tar.gz"
-              ["libgcrypt-1.6.2.tar.bz2"]="https://download.videolan.org/contrib/gcrypt/libgcrypt-1.6.2.tar.bz2"
-              ["libgpg-error-1.18.tar.bz2"]="https://download.videolan.org/pub/contrib/gpg-error/libgpg-error-1.18.tar.bz2"
-              ["gmp-6.0.0.tar.bz2"]="https://download.videolan.org/contrib/gmp/gmp-6.0.0.tar.bz2"
-              ["libiconv-1.14.tar.gz"]="https://download.videolan.org/contrib/iconv/libiconv-1.14.tar.gz"
-              ["libxml2-2.9.2.tar.gz"]="https://download.videolan.org/pub/contrib/libxml2/libxml2-2.9.2.tar.gz"
-              ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
-              ["live.2015.06.24.tar.gz"]="https://downloads.videolan.org/pub/contrib/live555/live.2015.06.24.tar.gz"
-              ["ffmpeg-HEAD.tar.xz"]="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
-              ["libmodplug-0.8.8.5.tar.gz"]="https://download.videolan.org/contrib/modplug/libmodplug-0.8.8.5.tar.gz"
-              ["nettle-2.7.1.tar.gz"]="https://download.videolan.org/contrib/nettle/nettle-2.7.1.tar.gz"
-              ["openjpeg-1.5.0.tar.gz"]="https://download.videolan.org/contrib/openjpeg/openjpeg-1.5.0.tar.gz"
-              ["libcddb-1.3.2.tar.bz2"]="https://download.videolan.org/testing/contrib/cddb/libcddb-1.3.2.tar.bz2"
-              ["chromaprint-1.0.tar.gz"]="https://download.videolan.org/contrib/chromaprint-1.0.tar.gz"
-              ["faad2-2.7.tar.gz"]="https://download.videolan.org/contrib/faad2/faad2-2.7.tar.gz"
-              ["libffi-3.0.13.tar.gz"]="https://download.videolan.org/testing/contrib/ffi/libffi-3.0.13.tar.gz"
-              ["fluidsynth-1.1.6.tar.bz2"]="https://download.videolan.org/contrib/fluid/fluidsynth-1.1.6.tar.bz2"
-              ["glew-1.7.0.tar.gz"]="https://download.videolan.org/testing/contrib/glew/glew-1.7.0.tar.gz"
-              ["glib-2.38.tar.xz"]="https://download.gnome.org/sources/glib/2.38/glib-2.38.0.tar.xz"
-              ["game-music-emu-0.6.0.tar.bz2"]="https://download.videolan.org/pub/contrib/gme/game-music-emu-0.6.0.tar.bz2"
-              ["growl-1.2.2.tar.bz2"]="https://download.videolan.org/testing/contrib/growl/growl-1.2.2.tar.bz2"
-              ["libkate-0.4.1.tar.gz"]="https://download.videolan.org/pub/pub/contrib/kate/libkate-0.4.1.tar.gz"
-              ["lame-3.99.5.tar.gz"]="https://download.videolan.org/pub/contrib/lame/lame-3.99.5.tar.gz"
-              ["mpg123-1.21.0.tar.bz2"]="https://download.videolan.org/contrib/mpg123/mpg123-1.21.0.tar.bz2"
-              ["libpng-1.6.19.tar.xz"]="https://download.videolan.org/pub/contrib/png/libpng-1.6.19.tar.xz"
-              ["projectM-2.0.1-Source.tar.gz"]="https://download.videolan.org/contrib/projectM/projectM-2.0.1-Source.tar.gz"
-              ["pthreads-w32-2-9-1-release.tar.gz"]="https://download.videolan.org/pub/contrib/pthreads/pthreads-w32-2-9-1-release.tar.gz"
-              ["sidplay-libs-2.1.1.tar.gz"]="https://download.videolan.org/pub/contrib/sidplay2/sidplay-libs-2.1.1.tar.gz"
-              ["soxr-0.1.2-Source.tar.xz"]="https://download.videolan.org/pub/contrib/soxr-0.1.2-Source.tar.xz"
-              ["tiff-4.0.3.tar.gz"]="https://download.videolan.org/contrib/tiff/tiff-4.0.3.tar.gz"
-              ["libtiger-0.3.1.tar.gz"]="https://download.videolan.org/pub/contrib/tiger/libtiger-0.3.1.tar.gz"
-              ["twolame-0.3.13.tar.gz"]="https://download.videolan.org/contrib/twolame/twolame-0.3.13.tar.gz"
-              ["libupnp-1.6.19.tar.bz2"]="https://download.videolan.org/contrib/upnp/libupnp-1.6.19.tar.bz2"
-              ["LibVNCServer-0.9.9.tar.gz"]="https://download.videolan.org/testing/contrib/vncclient/LibVNCServer-0.9.9.tar.gz"
-              ["zlib-1.2.8.tar.gz"]="https://download.videolan.org/pub/contrib/zlib/zlib-1.2.8.tar.gz"
-              ["zvbi-0.2.35.tar.bz2"]="https://download.videolan.org/contrib/zvbi/zvbi-0.2.35.tar.bz2"
-            )
-  
-            for F in "${!PKG_URLS[@]}"; do download "$F" "${PKG_URLS[$F]}"; done
-  
-            ###############################################
-            # build extras/tools
-            ###############################################
-            if [[ "${{ steps.vlc-contrib-cache.outputs.cache-hit }}" != "true" ]]; then
-                pushd vlc/extras/tools
-                ./bootstrap
-                make -j"$(nproc)"
-                popd
-            fi
-  
-            ###############################################
-            # Run buildall.sh
-            ###############################################
-            echo "📌 Running buildall.sh"
-            chmod +x ./buildall.sh
-            ./buildall.sh -a armv7l
-  
-            ###############################################
-            # configure + build VLC
-            ###############################################
-            mkdir -p vlc/build-tizen
-            pushd vlc/build-tizen
-  
-            ../configure \
-              --host=$HOST \
-              --build=$BUILD \
-              --disable-skins2 \
-              --disable-projectm \
-              --disable-upnp \
-              --enable-freetype \
-              --enable-fribidi \
-              --with-sysroot="$SYSROOT"
-  
-            make -j1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: tizen-studio-artifact
+          path: tizen-studio
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-exp-artifact
+          path: .
+
+      - name: Install VLC prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            help2man ragel nasm yasm meson \
+            protobuf-compiler build-essential pkg-config \
+            automake autoconf libtool libtool-bin gettext
+
+      # ----------------------------------------------
+      # 🧩 CACHE: VLC contrib & extras/tools
+      # ----------------------------------------------
+      - name: Restore VLC contrib cache
+        id: vlc-contrib-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/vlc-tizen/vlc/contrib/tarballs
+            build/vlc-tizen/vlc/extras/tools
+          key: vlc-contrib-cache-4e0fa1b
+
+      - name: Clone and build project
+        shell: bash
+        env:
+          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
+          TIZEN_PATH: ${{ github.workspace }}/tizen-studio
+        run: |
+          set -e
+          mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
+          cd build
+
+          git clone --depth 1 --branch "${{ matrix.branch }}" \
+            "https://github.com/${{ matrix.repo }}.git"
+
+          cd "$(basename "${{ matrix.repo }}")"
+          repo_name="$(basename "${{ matrix.repo }}")"
+
+          if [[ "$repo_name" != "vlc-tizen" ]]; then
+            echo "Building standard web project..."
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
+            "$TIZEN_PATH/tools/ide/bin/tizen" package \
+              -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
+            exit 0
+          fi
+
+          # ------------------------------------------------------
+          #               VLC-TIZEN BUILD PATH
+          # ------------------------------------------------------
+          echo "Building VLC-Tizen..."
+
+          echo "Using Tizen SDK..."
+          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          echo "🔧 Using sysroot: $SYSROOT"
+
+          echo "🔧 Forcing correct Tizen SDK version..."
+          printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
+          chmod +x "$TIZEN_SDK/sdk.version"
+          
+          export TIZEN_SDK_VERSION=4.0
+          export TIZEN_SDK_ROOT="$TIZEN_SDK"
+          
+          export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+          
+          # Clone VLC source
+          if [[ ! -d vlc ]]; then
+            git clone https://code.videolan.org/videolan/vlc.git vlc
+            pushd vlc
+            git checkout 4e0fa1b
             popd
-  
-            ###############################################
-            # package WGT
-            ###############################################
-            expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
-            cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
-  
-        - uses: softprops/action-gh-release@v2
-          with:
-            tag_name: "community-${{ github.run_number }}"
-            name: "Community Packages ${{ github.run_number }}"
-            files: "wgt_files/*.wgt"
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          fi
+
+          # --------------------------------------------------
+          # Pre-seed contrib tarballs (will use cached files)
+          # --------------------------------------------------
+          CONTRIB_DIR="vlc/contrib/tarballs"
+          mkdir -p "$CONTRIB_DIR"
+
+          download() {
+            [[ -f "$CONTRIB_DIR/$1" ]] && { echo "✔ Cached $1"; return; }
+            echo "⬇️ Downloading $1"
+            curl -L --fail --retry 4 --retry-delay 2 "$2" -o "$CONTRIB_DIR/$1"
+          }
+
+          declare -A PKG_URLS=(
+            ["a52dec-0.7.4.tar.gz"]="https://downloads.videolan.org/pub/contrib/a52dec-0.7.4.tar.gz"
+            ["libass-0.13.0.tar.gz"]="https://downloads.videolan.org/testing/contrib/ass/libass-0.13.0.tar.gz"
+            ["libdvbpsi-1.3.0.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvbpsi/1.3.0/libdvbpsi-1.3.0.tar.bz2"
+            ["libdvdcss-1.3.99.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdcss/1.3.99/libdvdcss-1.3.99.tar.bz2"
+            ["libdvdnav-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdnav/5.0.3/libdvdnav-5.0.3.tar.bz2"
+            ["libdvdread-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdread/5.0.3/libdvdread-5.0.3.tar.bz2"
+            ["libebml-1.3.3.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/ebml/libebml-1.3.3.tar.bz2"
+            ["libmatroska-1.4.4.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/matroska/libmatroska-1.4.4.tar.bz2"
+            ["libmad-0.15.1b.tar.gz"]="https://downloads.videolan.org/pub/contrib/libmad-0.15.1b.tar.gz"
+            ["libmpeg2-0.5.1.tar.gz"]="https://download.videolan.org/contrib/libmpeg2/libmpeg2-0.5.1.tar.gz"
+            ["flac-1.3.1.tar.xz"]="https://download.videolan.org/contrib/flac/flac-1.3.1.tar.xz"
+            ["freetype-2.6.1.tar.gz"]="https://download.videolan.org/contrib/freetype2/freetype-2.6.1.tar.gz"
+            ["fribidi-0.19.7.tar.bz2"]="https://download.videolan.org/contrib/fribidi/fribidi-0.19.7.tar.bz2"
+            ["harfbuzz-1.0.6.tar.bz2"]="https://download.videolan.org/pub/contrib/harfbuzz/harfbuzz-1.0.6.tar.bz2"
+            ["gnutls-3.2.21.tar.xz"]="https://downloads.videolan.org/pub/pub/contrib/gnutls/gnutls-3.2.21.tar.xz"
+            ["libtasn1-3.7.tar.gz"]="https://download.videolan.org/pub/pub/contrib/libtasn1/libtasn1-3.7.tar.gz"
+            ["libgcrypt-1.6.2.tar.bz2"]="https://download.videolan.org/contrib/gcrypt/libgcrypt-1.6.2.tar.bz2"
+            ["libgpg-error-1.18.tar.bz2"]="https://download.videolan.org/pub/contrib/gpg-error/libgpg-error-1.18.tar.bz2"
+            ["gmp-6.0.0.tar.bz2"]="https://download.videolan.org/contrib/gmp/gmp-6.0.0.tar.bz2"
+            ["libiconv-1.14.tar.gz"]="https://download.videolan.org/contrib/iconv/libiconv-1.14.tar.gz"
+            ["libxml2-2.9.2.tar.gz"]="https://download.videolan.org/pub/contrib/libxml2/libxml2-2.9.2.tar.gz"
+            ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
+            ["live.2015.06.24.tar.gz"]="https://downloads.videolan.org/pub/contrib/live555/live.2015.06.24.tar.gz"
+            ["ffmpeg-HEAD.tar.xz"]="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+            ["libmodplug-0.8.8.5.tar.gz"]="https://download.videolan.org/contrib/modplug/libmodplug-0.8.8.5.tar.gz"
+            ["nettle-2.7.1.tar.gz"]="https://download.videolan.org/contrib/nettle/nettle-2.7.1.tar.gz"
+            ["openjpeg-1.5.0.tar.gz"]="https://download.videolan.org/contrib/openjpeg/openjpeg-1.5.0.tar.gz"
+            ["libcddb-1.3.2.tar.bz2"]="https://download.videolan.org/testing/contrib/cddb/libcddb-1.3.2.tar.bz2"
+            ["chromaprint-1.0.tar.gz"]="https://download.videolan.org/contrib/chromaprint-1.0.tar.gz"
+            ["faad2-2.7.tar.gz"]="https://download.videolan.org/contrib/faad2/faad2-2.7.tar.gz"
+            ["libffi-3.0.13.tar.gz"]="https://download.videolan.org/testing/contrib/ffi/libffi-3.0.13.tar.gz"
+            ["fluidsynth-1.1.6.tar.bz2"]="https://download.videolan.org/contrib/fluid/fluidsynth-1.1.6.tar.bz2"
+            ["glew-1.7.0.tar.gz"]="https://download.videolan.org/testing/contrib/glew/glew-1.7.0.tar.gz"
+            ["glib-2.38.tar.xz"]="https://download.gnome.org/sources/glib/2.38/glib-2.38.0.tar.xz"
+            ["game-music-emu-0.6.0.tar.bz2"]="https://download.videolan.org/pub/contrib/gme/game-music-emu-0.6.0.tar.bz2"
+            ["growl-1.2.2.tar.bz2"]="https://download.videolan.org/testing/contrib/growl/growl-1.2.2.tar.bz2"
+            ["libkate-0.4.1.tar.gz"]="https://download.videolan.org/pub/pub/contrib/kate/libkate-0.4.1.tar.gz"
+            ["lame-3.99.5.tar.gz"]="https://download.videolan.org/pub/contrib/lame/lame-3.99.5.tar.gz"
+            ["mpg123-1.21.0.tar.bz2"]="https://download.videolan.org/contrib/mpg123/mpg123-1.21.0.tar.bz2"
+            ["libpng-1.6.19.tar.xz"]="https://download.videolan.org/pub/contrib/png/libpng-1.6.19.tar.xz"
+            ["projectM-2.0.1-Source.tar.gz"]="https://download.videolan.org/contrib/projectM/projectM-2.0.1-Source.tar.gz"
+            ["pthreads-w32-2-9-1-release.tar.gz"]="https://download.videolan.org/pub/contrib/pthreads/pthreads-w32-2-9-1-release.tar.gz"
+            ["sidplay-libs-2.1.1.tar.gz"]="https://download.videolan.org/pub/contrib/sidplay2/sidplay-libs-2.1.1.tar.gz"
+            ["soxr-0.1.2-Source.tar.xz"]="https://download.videolan.org/pub/contrib/soxr-0.1.2-Source.tar.xz"
+            ["tiff-4.0.3.tar.gz"]="https://download.videolan.org/contrib/tiff/tiff-4.0.3.tar.gz"
+            ["libtiger-0.3.1.tar.gz"]="https://download.videolan.org/pub/contrib/tiger/libtiger-0.3.1.tar.gz"
+            ["twolame-0.3.13.tar.gz"]="https://download.videolan.org/contrib/twolame/twolame-0.3.13.tar.gz"
+            ["libupnp-1.6.19.tar.bz2"]="https://download.videolan.org/contrib/upnp/libupnp-1.6.19.tar.bz2"
+            ["LibVNCServer-0.9.9.tar.gz"]="https://download.videolan.org/testing/contrib/vncclient/LibVNCServer-0.9.9.tar.gz"
+            ["zlib-1.2.8.tar.gz"]="https://download.videolan.org/pub/contrib/zlib/zlib-1.2.8.tar.gz"
+            ["zvbi-0.2.35.tar.bz2"]="https://download.videolan.org/contrib/zvbi/zvbi-0.2.35.tar.bz2"
+          )
+
+          for F in "${!PKG_URLS[@]}"; do
+            download "$F" "${PKG_URLS[$F]}"
+          done
+
+          # ---------------------------------------------
+          # Build extras/tools unless cached
+          # ---------------------------------------------
+          if [[ "${{ steps.vlc-contrib-cache.outputs.cache-hit }}" != "true" ]]; then
+            pushd vlc/extras/tools
+            ./bootstrap
+            make -j"$(nproc)"
+            popd
+          else
+            echo "✔ Using cached extras/tools"
+          fi
+
+          # -----------------------------------------------------
+          # Build VLC for Tizen
+          # -----------------------------------------------------
+          # -----------------------------------------------------
+          # Build VLC for Tizen (fixed cross-compile setup)
+          # -----------------------------------------------------
+          echo "🧹 Removing previous contrib build (avoids poisoned include paths)..."
+          rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
+
+          echo "🔧 Cleaning entire build environment (fix poisoning)..."
+
+          # Remove all host contamination
+          unset PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR
+          unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
+          unset EXTRA_CFLAGS EXTRA_CXXFLAGS EXTRA_LDFLAGS
+          unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH
+          unset OBJC_INCLUDE_PATH OBJCPLUS_INCLUDE_PATH
+
+          # ─────────────────────────────────────────────
+          # 1. Define proper cross-compile triplets
+          # ─────────────────────────────────────────────
+          export BUILD=x86_64-linux-gnu
+          export HOST=arm-linux-gnueabi
+          export TARGET=arm-linux-gnueabi
+
+          # ─────────────────────────────────────────────
+          # 2. Hard-define toolchain binaries
+          # ─────────────────────────────────────────────
+          TOOLBIN="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+
+          export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+          export AR="$TOOLBIN/arm-linux-gnueabi-ar"
+          export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
+          export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
+          export LD="$TOOLBIN/arm-linux-gnueabi-ld"
+
+          chmod -R +x "$TOOLBIN"
+
+          export PATH="$TOOLBIN:$PATH"
+
+          # ─────────────────────────────────────────────
+          # 3. Sysroot locking (global)
+          # ─────────────────────────────────────────────
+          export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
+          export CPPFLAGS="$SYSFLAGS"
+          export CFLAGS="$SYSFLAGS"
+          export CXXFLAGS="$SYSFLAGS"
+          export LDFLAGS="$SYSFLAGS"
+
+          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
+
+          # ─────────────────────────────────────────────
+          # 4. Contrib: force cross compile args
+          # ─────────────────────────────────────────────
+          export CONFIGURE_FLAGS="--host=$HOST --build=$BUILD --target=$TARGET"
+          export VLC_CONTRIB_ARGS="$CONFIGURE_FLAGS --disable-schroedinger --disable-mad --disable-projectm --disable-upnp --disable-swscale"
+
+          pushd vlc/contrib
+          echo 'append_args() { for a in $VLC_CONTRIB_ARGS; do set -- "$@" "$a"; done; printf "%s\n" "$@"; exit; }' > append.sh
+          chmod +x append.sh
+          sed -i '1i\set -- $(./append.sh "$@")' bootstrap
+          popd
+
+          # ─────────────────────────────────────────────
+          # 5. Patch contrib build system to enforce cross flags
+          # ─────────────────────────────────────────────
+          sed -i '1i CONFIGURE += $(CONFIGURE_FLAGS)' vlc/contrib/src/main.mak
+          sed -i '1i CONFIGURE_FLAGS='"$CONFIGURE_FLAGS"'' vlc/contrib/src/main.mak
+
+          # prevent running test binaries (e.g., jpeg)
+          sed -i 's/$(CC) conftest.c/echo "Skipping execution test"/' vlc/contrib/src/jpeg/rules.mak
+          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/jpeg/rules.mak
+
+          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/fribidi/rules.mak
+          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/gettext/rules.mak || true
+
+          echo "🛡 Environment fully sanitized. Starting contrib build…"
+
+          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+
+          ./buildall.sh -a armv7l || {
+              echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
+
+              ROOT="vlc/contrib/contrib-tizen-arm-linux-gnueabi"
+
+              FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -name ".stamp-configure" | \
+                  while read f; do
+                      MOD=$(dirname "$f")
+                      if [[ ! -f "$MOD/.stamp-build" ]]; then
+                          echo "$MOD"
+                      fi
+                  done | head -n 1)
+
+              if [[ -z "$FAILED_MODULE" ]]; then
+                  echo "⚠ Could not detect failing module via stamps — fallback."
+                  FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d ! -name ".*" | head -n 1)
+              fi
+
+              echo "🔥 REAL failing module: $FAILED_MODULE"
+
+              if [[ -f "$FAILED_MODULE/config.log" ]]; then
+                  echo "📄 FIRST 200 lines:"
+                  sed -n '1,200p' "$FAILED_MODULE/config.log"
+
+                  echo "📄 LAST 200 lines:"
+                  tail -n 200 "$FAILED_MODULE/config.log"
+              else
+                  echo "⚠ No config.log (configure died before writing)"
+              fi
+
+              echo "🔁 Re-running make in failing module with full debug"
+              make -C "$FAILED_MODULE" V=1 --debug=b || true
+
+              echo "❌ Stopping build."
+              exit 1
+          }
+
+
+          echo "Packaging WGT..."
+          expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
+          cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "community-${{ github.run_number }}"
+          name: "Community Packages ${{ github.run_number }}"
+          files: "wgt_files/*.wgt"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-release:
     runs-on: ubuntu-latest
