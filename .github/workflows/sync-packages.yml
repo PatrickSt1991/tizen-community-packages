@@ -54,21 +54,44 @@ jobs:
           set -e
           WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
 
-          echo "📦 Installing Tizen MOBILE 4.0 rootstrap (WebAppDevelopment-CLI)..."
+          echo "📝 DEBUG: Listing ALL available packages..."
+          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree || true
+
+          echo "📝 DEBUG: Searching specifically for MOBILE-4.0 packages..."
+          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree | grep -i "4.0" -n || true
+
+          echo "📝 DEBUG: Searching for CLI packages..."
+          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree | grep -i "CLI" -n || true
+
+          echo "📝 DEBUG: Searching for WebAppDevelopment..."
+          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree | grep -i "WebApp" -n || true
+
+          echo "🛑 If the package MOBILE-4.0-WebAppDevelopment-CLI is not visible above, installation WILL FAIL"
+          echo "🛑 Fix will require selecting the correct package name for Tizen 4.0"
+
+          echo "📦 Installing Tizen MOBILE 4.0 rootstrap..."
           "$WORKDIR/package-manager/package-manager.bin" \
             install "MOBILE-4.0-WebAppDevelopment-CLI" \
-            --accept-license
+            --accept-license --verbose || {
+              echo "❌ Rootstrap install failed — dumping logs"
+              ls -R "$WORKDIR/package-manager/log" || true
+              exit 1
+            }
 
           echo "📦 Installing GCC 4.9 toolchain..."
           "$WORKDIR/package-manager/package-manager.bin" \
             install "NativeToolchain-Gcc-4.9" \
-            --accept-license
+            --accept-license --verbose || {
+              echo "❌ Toolchain install failed — dumping logs"
+              ls -R "$WORKDIR/package-manager/log" || true
+              exit 1
+            }
 
           echo "🔍 Checking toolchain directory..."
-          find "$WORKDIR/tools" -maxdepth 3 -name "arm-linux-gnueabi-gcc-4.9" -print
+          find "$WORKDIR/tools" -maxdepth 4 -name "arm-linux-gnueabi-gcc-4.9" -print || true
 
-          echo "🔍 Checking 4.0 rootstrap directory..."
-          find "$WORKDIR/platforms" -maxdepth 4 -name "mobile-4.0-device.core" -print
+          echo "🔍 Checking rootstrap directory..."
+          find "$WORKDIR/platforms" -maxdepth 6 -name "*4.0*" -print || true
 
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
