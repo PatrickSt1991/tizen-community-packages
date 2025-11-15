@@ -86,6 +86,10 @@ jobs:
           unzip -o cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
           unzip -o cross-arm-gdb-7.8_1.1.2_ubuntu-64.zip
           unzip -o NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
+          
+          echo "🔐 Applying execute permissions..."
+          find . -type d -name "*gcc-4.9*" -exec chmod -R +x {} \;
+          find . -type d -name "*gdb-7.8*" -exec chmod -R +x {} \;
 
           echo "🧹 Cleaning..."
           rm cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
@@ -217,6 +221,7 @@ jobs:
           env:
             TIZEN_SDK: ${{ github.workspace }}/tizen-studio
             TIZEN_PATH: ${{ github.workspace }}/tizen-studio
+            TIZEN_STUDIO_VER: ${{ env.TIZEN_STUDIO_VER }}
           run: |
             set -e
             mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
