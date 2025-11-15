@@ -322,124 +322,91 @@ jobs:
           # -----------------------------------------------------
           # Build VLC for Tizen
           # -----------------------------------------------------
+          # -----------------------------------------------------
+          # Build VLC for Tizen (fixed cross-compile setup)
+          # -----------------------------------------------------
           echo "🧹 Removing previous contrib build (avoids poisoned include paths)..."
           rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
 
           echo "🔧 Cleaning entire build environment (fix poisoning)..."
-          
-          # Remove everything VLC/Contrib could have cached
-          unset PKG_CONFIG_PATH
-          unset PKG_CONFIG_LIBDIR
-          unset PKG_CONFIG_SYSROOT_DIR
-          
-          unset CPPFLAGS
-          unset CFLAGS
-          unset CXXFLAGS
-          unset LDFLAGS
-          
-          unset EXTRA_CFLAGS
-          unset EXTRA_CXXFLAGS
-          unset EXTRA_LDFLAGS
-          
-          # Remove host includes that GCC might auto-insert
-          unset CPATH
-          unset C_INCLUDE_PATH
-          unset CPLUS_INCLUDE_PATH
-          unset LIBRARY_PATH
-          
-          export CC="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-gcc"
-          export CXX="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-g++"
 
-          # Clean environment so contrib sets flags correctly
+          # Remove all host contamination
+          unset PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR
+          unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
+          unset EXTRA_CFLAGS EXTRA_CXXFLAGS EXTRA_LDFLAGS
+          unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH
+          unset OBJC_INCLUDE_PATH OBJCPLUS_INCLUDE_PATH
+
+          # ─────────────────────────────────────────────
+          # 1. Define proper cross-compile triplets
+          # ─────────────────────────────────────────────
+          export BUILD=x86_64-linux-gnu
+          export HOST=arm-linux-gnueabi
+          export TARGET=arm-linux-gnueabi
+
+          # ─────────────────────────────────────────────
+          # 2. Hard-define toolchain binaries
+          # ─────────────────────────────────────────────
+          TOOLBIN="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+
+          export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+          export AR="$TOOLBIN/arm-linux-gnueabi-ar"
+          export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
+          export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
+          export LD="$TOOLBIN/arm-linux-gnueabi-ld"
+
+          chmod -R +x "$TOOLBIN"
+
+          export PATH="$TOOLBIN:$PATH"
+
+          # ─────────────────────────────────────────────
+          # 3. Sysroot locking (global)
+          # ─────────────────────────────────────────────
+          export SYSFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include -L$SYSROOT/usr/lib"
+          export CPPFLAGS="$SYSFLAGS"
+          export CFLAGS="$SYSFLAGS"
+          export CXXFLAGS="$SYSFLAGS"
+          export LDFLAGS="$SYSFLAGS"
+
           export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
           export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
           export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
 
-          
-          echo "🔧 Fixing lost permissions in the Tizen GCC toolchain..."
-          chmod -R +x "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9"
-                    
-          echo "🚧 Starting VLC compilation..."
-          
-          # Force contrib to expose real failing contrib
-          export VERBOSE=1
-          export V=1
-          export MAKEFLAGS="-j1"
-          
-          # Force contrib NOT to pick up forbidden host include paths
-          export CCACHE_DISABLE=1
-          unset CCACHE_DIR
-          unset CPATH
-          unset C_INCLUDE_PATH
-          unset CPLUS_INCLUDE_PATH
-          unset LIBRARY_PATH
-          
-          # Freeze sysroot so contrib can't wander off into host dirs
-          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
-          export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
-          
-          # Make sure the Tizen toolchain is the ONLY toolchain
-          export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
+          # ─────────────────────────────────────────────
+          # 4. Contrib: force cross compile args
+          # ─────────────────────────────────────────────
+          export CONFIGURE_FLAGS="--host=$HOST --build=$BUILD --target=$TARGET"
+          export VLC_CONTRIB_ARGS="$CONFIGURE_FLAGS --disable-schroedinger --disable-mad --disable-projectm --disable-upnp --disable-swscale"
 
-          echo "Patching contrib bootstrap options..."
-          export VLC_CONTRIB_ARGS="--disable-schroedinger --disable-mad --disable-projectm --disable-upnp --disable-swscale"
-          
           pushd vlc/contrib
           echo 'append_args() { for a in $VLC_CONTRIB_ARGS; do set -- "$@" "$a"; done; printf "%s\n" "$@"; exit; }' > append.sh
           chmod +x append.sh
-          
           sed -i '1i\set -- $(./append.sh "$@")' bootstrap
           popd
 
-          echo "Removing Samsung DIBS hardcoded include paths from contrib..."
-          
-          # Remove the two poison include lines
-          sed -i \
-            '/CPPFLAGS += -I\/root\/\.dibs\/srib-dibs-builder-s42-u64\/workspace\/jobs\/3504\/buildRoot\/rs-devel_glibc-2.20\.armv7l\/usr\/include/d' \
-            vlc/contrib/src/main.mak
-          
-          sed -i \
-            '/CFLAGS   += -I\/root\/\.dibs\/srib-dibs-builder-s42-u64\/workspace\/jobs\/3504\/buildRoot\/rs-devel_glibc-2.20\.armv7l\/usr\/include/d' \
-            vlc/contrib/src/main.mak
-          
-          echo "✔ contrib/src/main.mak successfully cleaned"
-          echo "🛡 Applying final environment sanitization before contrib rebuild..."
+          # ─────────────────────────────────────────────
+          # 5. Patch contrib build system to enforce cross flags
+          # ─────────────────────────────────────────────
+          sed -i '1i CONFIGURE += $(CONFIGURE_FLAGS)' vlc/contrib/src/main.mak
+          sed -i '1i CONFIGURE_FLAGS='"$CONFIGURE_FLAGS"'' vlc/contrib/src/main.mak
 
-          # ────────────────────────────────────────────────────────────
-          # 1. Remove all host contamination (Samsung DIBS, Ubuntu, etc.)
-          # ────────────────────────────────────────────────────────────
-          unset C_INCLUDE_PATH
-          unset CPLUS_INCLUDE_PATH
-          unset OBJC_INCLUDE_PATH
-          unset OBJCPLUS_INCLUDE_PATH
-          unset CPATH
-          unset LIBRARY_PATH
+          # prevent running test binaries (e.g., jpeg)
+          sed -i 's/$(CC) conftest.c/echo "Skipping execution test"/' vlc/contrib/src/jpeg/rules.mak
+          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/jpeg/rules.mak
 
-          # ────────────────────────────────────────────────────────────
-          # 2. Explicitly force ONLY the Tizen sysroot
-          # ────────────────────────────────────────────────────────────
-          export CPPFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
-          export CFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
-          export CXXFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
-          export LDFLAGS="--sysroot=$SYSROOT -L$SYSROOT/usr/lib"
+          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/fribidi/rules.mak
+          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/gettext/rules.mak || true
 
-          # ────────────────────────────────────────────────────────────
-          # 3. FORCE contrib modules to use *our* flags (critical!)
-          # ────────────────────────────────────────────────────────────
-          export CONTRIB_CPPFLAGS="$CPPFLAGS"
-          export CONTRIB_CFLAGS="$CFLAGS"
-          export CONTRIB_CXXFLAGS="$CXXFLAGS"
-          export CONTRIB_LDFLAGS="$LDFLAGS"
+          echo "🛡 Environment fully sanitized. Starting contrib build…"
 
-          echo "✔ Sysroot hard-locked. Samsung DIBS poisoning prevented."
+          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
-          
+
               ROOT="vlc/contrib/contrib-tizen-arm-linux-gnueabi"
-          
-              # --------------------------------------------------------------------
-              # 1. Detect REAL failing module using stamp logic
-              # --------------------------------------------------------------------
+
               FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -name ".stamp-configure" | \
                   while read f; do
                       MOD=$(dirname "$f")
@@ -447,43 +414,28 @@ jobs:
                           echo "$MOD"
                       fi
                   done | head -n 1)
-          
+
               if [[ -z "$FAILED_MODULE" ]]; then
-                  echo "⚠ Could not find failing module via stamp files — using fallback scan."
-                  FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d \
-                                  ! -name ".*" | sort | head -n 1)
+                  echo "⚠ Could not detect failing module via stamps — fallback."
+                  FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d ! -name ".*" | head -n 1)
               fi
-          
+
               echo "🔥 REAL failing module: $FAILED_MODULE"
-          
-              # --------------------------------------------------------------------
-              # 2. Dump config.log if present
-              # --------------------------------------------------------------------
+
               if [[ -f "$FAILED_MODULE/config.log" ]]; then
-                  echo ""
-                  echo "📄 Showing FIRST 200 lines of config.log:"
-                  echo "------------------------------------------------------------"
-                  sed -n '1,200p' "$FAILED_MODULE/config.log" || true
-          
-                  echo ""
-                  echo "📄 Showing LAST 200 lines of config.log:"
-                  echo "------------------------------------------------------------"
-                  tail -n 200 "$FAILED_MODULE/config.log" || true
+                  echo "📄 FIRST 200 lines:"
+                  sed -n '1,200p' "$FAILED_MODULE/config.log"
+
+                  echo "📄 LAST 200 lines:"
+                  tail -n 200 "$FAILED_MODULE/config.log"
               else
-                  echo "⚠ config.log does NOT exist — meaning configure failed before writing it."
+                  echo "⚠ No config.log (configure died before writing)"
               fi
-          
-              # --------------------------------------------------------------------
-              # 3. Re-run make with full debug output
-              # --------------------------------------------------------------------
-              echo ""
-              echo "🔁 Re-running make inside $FAILED_MODULE"
-              echo "------------------------------------------------------------"
-          
+
+              echo "🔁 Re-running make in failing module with full debug"
               make -C "$FAILED_MODULE" V=1 --debug=b || true
-          
-              echo "------------------------------------------------------------"
-              echo "❌ Stopping build — module above is the ACTUAL failing part."
+
+              echo "❌ Stopping build."
               exit 1
           }
 
