@@ -48,60 +48,59 @@ jobs:
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: List all available Tizen packages
-        if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "🔍 Running package-manager-cli.bin show-pkgs --tree"
-          chmod +x tizen-studio/package-manager/package-manager-cli.bin
-          tizen-studio/package-manager/package-manager-cli.bin show-pkgs --tree || true
-
-          echo "🔍 Checking repository metadata files"
-          find tizen-studio -maxdepth 5 -type f -name "*.xml" -print || true
-
-      - name: Install Tizen 4.0 Rootstrap and Toolchain
+      - name: Install Tizen 4.0 rootstrap (0.0.62)
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         run: |
           set -e
-          WORKDIR="${GITHUB_WORKSPACE}/tizen-studio"
+          cd tizen-studio
 
-          echo "📝 DEBUG: Listing ALL available packages..."
-          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree || true
+          echo "⬇️ Downloading MOBILE-4.0 rootstrap 0.0.62..."
+          curl -L -o rootstrap.zip \
+            "https://download.tizen.org/sdk/tizenstudio/official/binary/mobile-4.0-rs-device.core_0.0.62_ubuntu-64.zip"
 
-          echo "📝 DEBUG: Searching specifically for MOBILE-4.0 packages..."
-          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree | grep -i "4.0" -n || true
+          echo "📦 Extracting rootstrap..."
+          unzip -o rootstrap.zip
 
-          echo "📝 DEBUG: Searching for CLI packages..."
-          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree | grep -i "CLI" -n || true
+          echo "📁 Moving rootstrap into final SDK path..."
+          mkdir -p platforms/tizen-4.0/mobile/rootstraps/
+          rsync -av data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-rs-device.core \
+            platforms/tizen-4.0/mobile/rootstraps/
 
-          echo "📝 DEBUG: Searching for WebAppDevelopment..."
-          "$WORKDIR/package-manager/package-manager.bin" show-pkgs --tree | grep -i "WebApp" -n || true
+          echo "🧹 Cleaning..."
+          rm -rf data rootstrap.zip
 
-          echo "🛑 If the package MOBILE-4.0-WebAppDevelopment-CLI is not visible above, installation WILL FAIL"
-          echo "🛑 Fix will require selecting the correct package name for Tizen 4.0"
+          echo "✔ Rootstrap installed successfully"
 
-          echo "📦 Installing Tizen MOBILE 4.0 rootstrap..."
-          "$WORKDIR/package-manager/package-manager.bin" \
-            install "MOBILE-4.0-WebAppDevelopment-CLI" \
-            --accept-license --verbose || {
-              echo "❌ Rootstrap install failed — dumping logs"
-              ls -R "$WORKDIR/package-manager/log" || true
-              exit 1
-            }
+      - name: Install GCC 4.9 Cross Toolchain
+        if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          cd tizen-studio/tools
 
-          echo "📦 Installing GCC 4.9 toolchain..."
-          "$WORKDIR/package-manager/package-manager.bin" \
-            install "NativeToolchain-Gcc-4.9" \
-            --accept-license --verbose || {
-              echo "❌ Toolchain install failed — dumping logs"
-              ls -R "$WORKDIR/package-manager/log" || true
-              exit 1
-            }
+          echo "⬇️ Downloading GCC 4.9 toolchain components..."
+          curl -L -O https://download.tizen.org/sdk/tizenstudio/official/binary/cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
+          curl -L -O https://download.tizen.org/sdk/tizenstudio/official/binary/cross-arm-gdb-7.8_1.1.2_ubuntu-64.zip
+          curl -L -O https://download.tizen.org/sdk/tizenstudio/official/binary/NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
 
-          echo "🔍 Checking toolchain directory..."
-          find "$WORKDIR/tools" -maxdepth 4 -name "arm-linux-gnueabi-gcc-4.9" -print || true
+          echo "📦 Extracting cross toolchains..."
+          unzip -o cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
+          unzip -o cross-arm-gdb-7.8_1.1.2_ubuntu-64.zip
+          unzip -o NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
 
-          echo "🔍 Checking rootstrap directory..."
-          find "$WORKDIR/platforms" -maxdepth 6 -name "*4.0*" -print || true
+          echo "🧹 Cleaning..."
+          rm cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
+          rm cross-arm-gdb-7.8_1.1.2_ubuntu-64.zip
+          rm NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
+
+          echo "✔ GCC 4.9 installed"
+
+      - name: Debug rootstrap + toolchain
+        run: |
+          echo "🔍 Checking installed rootstrap:"
+          find tizen-studio/platforms -maxdepth 5 -type d -name "mobile-4.0-rs-device.core"
+
+          echo "🔍 Checking GCC 4.9 binaries:"
+          find tizen-studio/tools -maxdepth 4 -type f -name "arm-linux-gnueabi-gcc"
 
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
@@ -243,7 +242,7 @@ jobs:
           echo "Building VLC-Tizen..."
 
           echo "Using Tizen SDK..."
-          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-rs-device.core"
           echo "🔧 Using sysroot: $SYSROOT"
 
           echo "🔧 Forcing correct Tizen SDK version..."
