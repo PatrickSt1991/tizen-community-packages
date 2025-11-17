@@ -247,7 +247,7 @@ jobs:
           printf '%s\n' "4.0" > "$TIZEN_SDK/sdk.version"
           printf '%s\n' "4.0" > "$TIZEN_SDK/sdk.info"
 
-          chmod +x "$TIZEN_SDK/sdk.version"
+          chmod +x "$TIZEN_SDK/sdk.version" "$TIZEN_SDK/sdk.info"
           
           export TIZEN_SDK_VERSION=4.0
           export TIZEN_SDK_ROOT="$TIZEN_SDK"
@@ -413,13 +413,8 @@ jobs:
           chmod -R +x "$TOOLBIN"
 
           # put the toolchain bin in front of PATH
-          export PATH="$TOOLBIN:$PATH"
+          export PATH="$TOOLBIN:/usr/bin:/bin"
 
-          # use bare tool names + sysroot, now that PATH is set
-          export AR="arm-linux-gnueabi-ar"
-          export RANLIB="arm-linux-gnueabi-ranlib"
-          export STRIP="arm-linux-gnueabi-strip"
-          export LD="arm-linux-gnueabi-ld"
 
           # ─────────────────────────────────────────────
           # 3. Sysroot locking (global)
