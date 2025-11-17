@@ -196,7 +196,8 @@ jobs:
           sudo apt-get install -y \
             help2man ragel nasm yasm meson \
             protobuf-compiler build-essential pkg-config \
-            automake autoconf libtool libtool-bin gettext
+            automake autoconf libtool libtool-bin gettext \
+            cmake
 
       # ----------------------------------------------
       # 🧩 CACHE: VLC contrib & extras/tools
