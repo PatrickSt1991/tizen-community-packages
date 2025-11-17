@@ -213,6 +213,17 @@ jobs:
             build/vlc-tizen/vlc/extras/tools
           key: vlc-contrib-cache-4e0fa1b
 
+      - name: Fix toolchain permissions after artifact restore
+        run: |
+          echo "🔧 Restoring execute bits for GCC toolchain"
+          find tizen-studio -type f -path "*/bin/arm-linux-gnueabi-*" -exec chmod +x {} \;
+          find tizen-studio -type f -path "*/libexec/gcc/*/cc1" -exec chmod +x {} \;
+          find tizen-studio -type f -path "*/libexec/gcc/*/cc1plus" -exec chmod +x {} \;
+      
+          echo "📌 cc1 permissions:"
+          find tizen-studio -name cc1 -exec ls -l {} \;
+
+
       - name: Clone and build project
         shell: bash
         env:
