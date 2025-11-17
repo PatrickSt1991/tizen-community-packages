@@ -252,6 +252,12 @@ jobs:
           
           export TIZEN_SDK_VERSION=4.0
           export TIZEN_SDK_ROOT="$TIZEN_SDK"
+
+          # Correct sysroot settings for contrib
+          export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
           
           # Clone VLC source
           if [[ ! -d vlc ]]; then
@@ -331,149 +337,73 @@ jobs:
             download "$F" "${PKG_URLS[$F]}"
           done
           
-          # ---------------------------------------------
-          # Build extras/tools unless cached
-          # ---------------------------------------------
-          if [[ "${{ steps.vlc-contrib-cache.outputs.cache-hit }}" != "true" ]]; then
-            pushd vlc/extras/tools
-            ./bootstrap
-            make -j"$(nproc)"
-            popd
-          else
-            echo "✔ Using cached extras/tools"
-          fi
-
-          # -----------------------------------------------------
-          # Build VLC for Tizen (fixed cross-compile setup)
-          # -----------------------------------------------------
           echo "🧹 Removing previous contrib build (avoids poisoned include paths)..."
           rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
-
-          echo "🔧 Cleaning entire build environment (fix poisoning)..."
-
-          echo "🔧 Patching FreeType include poisoning in contribs…"
           
-          # libass
+          echo "🔧 Patching libass FreeType include"
           sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
               vlc/contrib/src/ass/rules.mak
           
-          # harfbuzz
-          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/harfbuzz/rules.mak || true
-          
-          # freetype (safety patch)
-          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/freetype2/rules.mak || true
-
-          # fribidi
-          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/fribidi/rules.mak || true
-          
-          # fontconfig
-          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/fontconfig/rules.mak || true
-          
-          # pixman
-          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/pixman/rules.mak || true
-          
-          # cairo
-          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/cairo/rules.mak || true
-
-          # Remove all host contamination
+          # Clean all host contamination
           unset PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR
           unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
           unset EXTRA_CFLAGS EXTRA_CXXFLAGS EXTRA_LDFLAGS
-          unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH
-          unset OBJC_INCLUDE_PATH OBJCPLUS_INCLUDE_PATH
-
-          # ─────────────────────────────────────────────
-          # 1. Define proper cross-compile triplets
-          # ─────────────────────────────────────────────
+          unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH OBJC_INCLUDE_PATH OBJCPLUS_INCLUDE_PATH
+          
+          # Triplets
           export BUILD=x86_64-linux-gnu
           export HOST=arm-linux-gnueabi
           export TARGET=arm-linux-gnueabi
-
-          # ─────────────────────────────────────────────
-          # 2. Hard-define toolchain binaries (auto-detect)
-          # ─────────────────────────────────────────────
-          echo "🔍 Locating GCC 4.9 toolchain…"
-
-          GCC49_DIR=$(find "$TIZEN_SDK" -maxdepth 8 -type f -name "arm-linux-gnueabi-gcc" | head -n 1)
-
-          if [[ -z "$GCC49_DIR" ]]; then
-              echo "❌ GCC executable not found under: $TIZEN_SDK"
-              echo "🔎 Current layout (debug):"
-              find "$TIZEN_SDK" -maxdepth 8 -type f -name "arm-linux-gnueabi-gcc" || true
+          
+          echo "🔍 Locating GCC 4.9 toolchain"
+          GCC49_BIN=$(find "$TIZEN_SDK" -maxdepth 8 -type f -name arm-linux-gnueabi-gcc | head -n 1)
+          if [[ -z "$GCC49_BIN" ]]; then
+              echo "❌ GCC not found"
               exit 1
           fi
-
-          TOOLBIN=$(dirname "$GCC49_DIR")
-          echo "✔ GCC found at: $GCC49_DIR"
+          
+          TOOLBIN=$(dirname "$GCC49_BIN")
+          echo "✔ GCC found at $GCC49_BIN"
           chmod -R +x "$TOOLBIN"
-
-          # put the toolchain bin in front of PATH
-          export PATH="$TOOLBIN:/usr/bin:/bin"
-
-
-          # ─────────────────────────────────────────────
-          # 3. Sysroot locking (global)
-          # ─────────────────────────────────────────────
-          export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+          
+          # Single PATH update only (bin + libexec)
+          GCCROOT=$(dirname "$TOOLBIN")
+          export PATH="$TOOLBIN:$GCCROOT/libexec/gcc/arm-linux-gnueabi/4.9.2:/usr/bin:/bin"
+          
+          # Correct sysroot-locked toolchain
+          export CC="$TOOLBIN/arm-linux-gnueabi-gcc"
+          export CXX="$TOOLBIN/arm-linux-gnueabi-g++"
           export AR="$TOOLBIN/arm-linux-gnueabi-ar"
           export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
           export LD="$TOOLBIN/arm-linux-gnueabi-ld"
           export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
           
+          # pkg-config wrapper for sysroot
           export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
           export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
           export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
-
-          # ─────────────────────────────────────────────
-          # 4. Contrib: force cross compile args
-          # ─────────────────────────────────────────────
-          export CONFIGURE_FLAGS="--host=$HOST --build=$BUILD --target=$TARGET"
-          export VLC_CONTRIB_ARGS="$CONFIGURE_FLAGS --disable-schroedinger --disable-mad --disable-projectm --disable-upnp --disable-swscale"
           
-          # ─────────────────────────────────────────────
-          # 5. Patch contrib build system to enforce cross flags
-          # ─────────────────────────────────────────────
-          sed -i '1i CONFIGURE += $(CONFIGURE_FLAGS)' vlc/contrib/src/main.mak
-          sed -i '1i CONFIGURE_FLAGS='"$CONFIGURE_FLAGS"'' vlc/contrib/src/main.mak
-
-          # prevent running test binaries (e.g., jpeg)
-          sed -i 's/$(CC) conftest.c/echo "Skipping execution test"/' vlc/contrib/src/jpeg/rules.mak
-          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/jpeg/rules.mak
-
-          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/fribidi/rules.mak
-          sed -i 's/\.\/conftest/echo "NO RUN"/' vlc/contrib/src/gettext/rules.mak || true
-          
-          echo "🔧 Disabling AC_TRY_RUN / AC_RUN_IFELSE for cross compile..."
-          
-          cat << 'EOF' > disable-run.m4
+          # Disable AC_RUN_IFELSE / AC_TRY_RUN
+          mkdir -p vlc/contrib/m4
+          cat << 'EOF' > vlc/contrib/m4/disable-run.m4
           AC_DEFUN([AC_TRY_RUN],[
             AC_MSG_NOTICE([Cross-compile: skipping run test])
-            $[$2]="$3"
+            AS_VAR_SET($2, ["$3"])
           ])
-          
           AC_DEFUN([AC_RUN_IFELSE],[
             AC_MSG_NOTICE([Cross-compile: skipping run test])
             ifelse([$3], , :, [$3])
           ])
           EOF
           
-          # Autoconf search path
-          mkdir -p vlc/contrib/m4
-          cp disable-run.m4 vlc/contrib/m4/
-
-          export ACLOCAL_PATH="$PWD/vlc/contrib/m4"
+          export ACLOCAL_PATH="$PWD/vlc/contrib/m4:$PWD/vlc/extras/tools/m4"
           export AUTOM4TE_SUBDIRS="$PWD/vlc/contrib/m4"
-
+          
           echo "🛡 Environment fully sanitized. Starting contrib build…"
-
+          
           export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+          
+          echo "🔧 Running buildall.sh"
 
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
