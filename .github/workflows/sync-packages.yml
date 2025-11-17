@@ -90,6 +90,7 @@ jobs:
           echo "🔐 Applying execute permissions..."
           find . -type d -name "*gcc-4.9*" -exec chmod -R +x {} \;
           find . -type d -name "*gdb-7.8*" -exec chmod -R +x {} \;
+          find . -type f -name "arm-linux-gnueabi-*" -exec chmod +x {} \;
 
           echo "🧹 Cleaning..."
           rm cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
@@ -243,13 +244,13 @@ jobs:
           echo "🔧 Using sysroot: $SYSROOT"
 
           echo "🔧 Forcing correct Tizen SDK version..."
-          printf '#!/bin/sh\necho 4.0\n' > "$TIZEN_SDK/sdk.version"
+          printf '%s\n' "4.0" > "$TIZEN_SDK/sdk.version"
+          printf '%s\n' "4.0" > "$TIZEN_SDK/sdk.info"
+
           chmod +x "$TIZEN_SDK/sdk.version"
           
           export TIZEN_SDK_VERSION=4.0
           export TIZEN_SDK_ROOT="$TIZEN_SDK"
-          
-          export PATH="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin:$PATH"
           
           # Clone VLC source
           if [[ ! -d vlc ]]; then
@@ -258,20 +259,6 @@ jobs:
             git checkout 4e0fa1b
             popd
           fi
-
-          echo "🔧 Patching FreeType include poisoning in contribs…"
-          
-          # libass
-          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/ass/rules.mak
-          
-          # harfbuzz
-          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/harfbuzz/rules.mak || true
-          
-          # freetype (safety patch)
-          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/freetype2/rules.mak || true
 
           # --------------------------------------------------
           # Pre-seed contrib tarballs (will use cached files)
@@ -356,15 +343,42 @@ jobs:
           fi
 
           # -----------------------------------------------------
-          # Build VLC for Tizen
-          # -----------------------------------------------------
-          # -----------------------------------------------------
           # Build VLC for Tizen (fixed cross-compile setup)
           # -----------------------------------------------------
           echo "🧹 Removing previous contrib build (avoids poisoned include paths)..."
           rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
 
           echo "🔧 Cleaning entire build environment (fix poisoning)..."
+
+          echo "🔧 Patching FreeType include poisoning in contribs…"
+          
+          # libass
+          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/ass/rules.mak
+          
+          # harfbuzz
+          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/harfbuzz/rules.mak || true
+          
+          # freetype (safety patch)
+          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/freetype2/rules.mak || true
+
+          # fribidi
+          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/fribidi/rules.mak || true
+          
+          # fontconfig
+          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/fontconfig/rules.mak || true
+          
+          # pixman
+          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/pixman/rules.mak || true
+          
+          # cairo
+          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/cairo/rules.mak || true
 
           # Remove all host contamination
           unset PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR
@@ -381,28 +395,31 @@ jobs:
           export TARGET=arm-linux-gnueabi
 
           # ─────────────────────────────────────────────
-          # 2. Hard-define toolchain binaries
+          # 2. Hard-define toolchain binaries (auto-detect)
           # ─────────────────────────────────────────────
-          echo "🔧 Forcing correct GCC 4.9 toolchain path"
-          
-          GCC49_REAL="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          
-          if [[ ! -x "$GCC49_REAL/arm-linux-gnueabi-gcc" ]]; then
-              echo "❌ Correct GCC toolchain NOT FOUND at: $GCC49_REAL"
-              find "$TIZEN_SDK/tools" -maxdepth 6 -type f -name 'arm-linux-gnueabi-gcc'
+          echo "🔍 Locating GCC 4.9 toolchain…"
+
+          GCC49_DIR=$(find "$TIZEN_SDK" -maxdepth 8 -type f -name "arm-linux-gnueabi-gcc" | head -n 1)
+
+          if [[ -z "$GCC49_DIR" ]]; then
+              echo "❌ GCC executable not found under: $TIZEN_SDK"
+              echo "🔎 Current layout (debug):"
+              find "$TIZEN_SDK" -maxdepth 8 -type f -name "arm-linux-gnueabi-gcc" || true
               exit 1
           fi
-          
-          export PATH="$GCC49_REAL:$PATH"
-          
-          export CC="$GCC49_REAL/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-          export CXX="$GCC49_REAL/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-          export AR="$GCC49_REAL/arm-linux-gnueabi-ar"
-          export RANLIB="$GCC49_REAL/arm-linux-gnueabi-ranlib"
-          export STRIP="$GCC49_REAL/arm-linux-gnueabi-strip"
-          export LD="$GCC49_REAL/arm-linux-gnueabi-ld"
-          
-          echo "✔ Using GCC from: $GCC49_REAL"
+
+          TOOLBIN=$(dirname "$GCC49_DIR")
+          echo "✔ GCC found at: $GCC49_DIR"
+          chmod -R +x "$TOOLBIN"
+
+          # put the toolchain bin in front of PATH
+          export PATH="$TOOLBIN:$PATH"
+
+          # use bare tool names + sysroot, now that PATH is set
+          export AR="arm-linux-gnueabi-ar"
+          export RANLIB="arm-linux-gnueabi-ranlib"
+          export STRIP="arm-linux-gnueabi-strip"
+          export LD="arm-linux-gnueabi-ld"
 
           # ─────────────────────────────────────────────
           # 3. Sysroot locking (global)
