@@ -259,9 +259,19 @@ jobs:
             popd
           fi
 
-          echo "🔧 Patching libass FREETYPE_CFLAGS path"
+          echo "🔧 Patching FreeType include poisoning in contribs…"
+          
+          # libass
           sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
               vlc/contrib/src/ass/rules.mak
+          
+          # harfbuzz
+          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/harfbuzz/rules.mak || true
+          
+          # freetype (safety patch)
+          sed -i 's|CPPFLAGS="|CPPFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/freetype2/rules.mak || true
 
           # --------------------------------------------------
           # Pre-seed contrib tarballs (will use cached files)
