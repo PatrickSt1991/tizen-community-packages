@@ -91,6 +91,8 @@ jobs:
           find . -type d -name "*gcc-4.9*" -exec chmod -R +x {} \;
           find . -type d -name "*gdb-7.8*" -exec chmod -R +x {} \;
           find . -type f -name "arm-linux-gnueabi-*" -exec chmod +x {} \;
+          find . -type f -path "*/libexec/gcc/*/cc1" -exec chmod +x {} \;
+          find . -type f -path "*/libexec/gcc/*/cc1plus" -exec chmod +x {} \;
 
           echo "🧹 Cleaning..."
           rm cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
