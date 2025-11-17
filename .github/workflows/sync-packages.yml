@@ -259,6 +259,10 @@ jobs:
             popd
           fi
 
+          echo "🔧 Patching libass FREETYPE_CFLAGS path"
+          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$(PREFIX)/include/freetype2 |' \
+              vlc/contrib/src/ass/rules.mak
+
           # --------------------------------------------------
           # Pre-seed contrib tarballs (will use cached files)
           # --------------------------------------------------
@@ -369,32 +373,26 @@ jobs:
           # ─────────────────────────────────────────────
           # 2. Hard-define toolchain binaries
           # ─────────────────────────────────────────────
-          echo "🔍 Locating GCC 4.9 toolchain…"
+          echo "🔧 Forcing correct GCC 4.9 toolchain path"
           
-          GCC49_DIR=$(find "$TIZEN_SDK/tools" -maxdepth 6 -type f -name "arm-linux-gnueabi-gcc" | head -n 1)
+          GCC49_REAL="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
           
-          if [[ -z "$GCC49_DIR" ]]; then
-              echo "❌ GCC executable not found!"
-              find "$TIZEN_SDK/tools" -maxdepth 6 -print | grep gcc
+          if [[ ! -x "$GCC49_REAL/arm-linux-gnueabi-gcc" ]]; then
+              echo "❌ Correct GCC toolchain NOT FOUND at: $GCC49_REAL"
+              find "$TIZEN_SDK/tools" -maxdepth 6 -type f -name 'arm-linux-gnueabi-gcc'
               exit 1
           fi
           
-          TOOLBIN=$(dirname "$GCC49_DIR")
+          export PATH="$GCC49_REAL:$PATH"
           
-          echo "✔ GCC found at: $TOOLBIN"
+          export CC="$GCC49_REAL/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
+          export CXX="$GCC49_REAL/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+          export AR="$GCC49_REAL/arm-linux-gnueabi-ar"
+          export RANLIB="$GCC49_REAL/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC49_REAL/arm-linux-gnueabi-strip"
+          export LD="$GCC49_REAL/arm-linux-gnueabi-ld"
           
-          chmod -R +x "$(dirname "$TOOLBIN")"
-          
-          export PATH="$TOOLBIN:$PATH"
-          
-          export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
-          export AR="$TOOLBIN/arm-linux-gnueabi-ar"
-          export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
-          export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
-          export LD="$TOOLBIN/arm-linux-gnueabi-ld"
-
-
+          echo "✔ Using GCC from: $GCC49_REAL"
 
           # ─────────────────────────────────────────────
           # 3. Sysroot locking (global)
