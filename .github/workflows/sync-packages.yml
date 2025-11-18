@@ -298,6 +298,60 @@ jobs:
               echo "⬇️ Downloading $1"
               curl -L --fail --retry 4 --retry-delay 2 "$2" -o "$CONTRIB_DIR/$1"
           }
+
+          declare -A PKG_URLS=(
+            ["a52dec-0.7.4.tar.gz"]="https://downloads.videolan.org/pub/contrib/a52dec-0.7.4.tar.gz"
+            ["libass-0.13.0.tar.gz"]="https://downloads.videolan.org/testing/contrib/ass/libass-0.13.0.tar.gz"
+            ["libdvbpsi-1.3.0.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvbpsi/1.3.0/libdvbpsi-1.3.0.tar.bz2"
+            ["libdvdcss-1.3.99.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdcss/1.3.99/libdvdcss-1.3.99.tar.bz2"
+            ["libdvdnav-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdnav/5.0.3/libdvdnav-5.0.3.tar.bz2"
+            ["libdvdread-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdread/5.0.3/libdvdread-5.0.3.tar.bz2"
+            ["libebml-1.3.3.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/ebml/libebml-1.3.3.tar.bz2"
+            ["libmatroska-1.4.4.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/matroska/libmatroska-1.4.4.tar.bz2"
+            ["libmad-0.15.1b.tar.gz"]="https://downloads.videolan.org/pub/contrib/libmad-0.15.1b.tar.gz"
+            ["libmpeg2-0.5.1.tar.gz"]="https://download.videolan.org/contrib/libmpeg2/libmpeg2-0.5.1.tar.gz"
+            ["flac-1.3.1.tar.xz"]="https://download.videolan.org/contrib/flac/flac-1.3.1.tar.xz"
+            ["freetype-2.6.1.tar.gz"]="https://download.videolan.org/contrib/freetype2/freetype-2.6.1.tar.gz"
+            ["fribidi-0.19.7.tar.bz2"]="https://download.videolan.org/contrib/fribidi/fribidi-0.19.7.tar.bz2"
+            ["harfbuzz-1.0.6.tar.bz2"]="https://download.videolan.org/pub/contrib/harfbuzz/harfbuzz-1.0.6.tar.bz2"
+            ["gnutls-3.2.21.tar.xz"]="https://downloads.videolan.org/pub/pub/contrib/gnutls/gnutls-3.2.21.tar.xz"
+            ["libtasn1-3.7.tar.gz"]="https://download.videolan.org/pub/pub/contrib/libtasn1/libtasn1-3.7.tar.gz"
+            ["libgcrypt-1.6.2.tar.bz2"]="https://download.videolan.org/contrib/gcrypt/libgcrypt-1.6.2.tar.bz2"
+            ["libgpg-error-1.18.tar.bz2"]="https://download.videolan.org/pub/contrib/gpg-error/libgpg-error-1.18.tar.bz2"
+            ["gmp-6.0.0.tar.bz2"]="https://download.videolan.org/contrib/gmp/gmp-6.0.0.tar.bz2"
+            ["libiconv-1.14.tar.gz"]="https://download.videolan.org/contrib/iconv/libiconv-1.14.tar.gz"
+            ["libxml2-2.9.2.tar.gz"]="https://download.videolan.org/pub/contrib/libxml2/libxml2-2.9.2.tar.gz"
+            ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
+            ["live.2015.06.24.tar.gz"]="https://downloads.videolan.org/pub/contrib/live555/live.2015.06.24.tar.gz"
+            ["ffmpeg-HEAD.tar.xz"]="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+            ["libmodplug-0.8.8.5.tar.gz"]="https://download.videolan.org/contrib/modplug/libmodplug-0.8.8.5.tar.gz"
+            ["nettle-2.7.1.tar.gz"]="https://download.videolan.org/contrib/nettle/nettle-2.7.1.tar.gz"
+            ["openjpeg-1.5.0.tar.gz"]="https://download.videolan.org/contrib/openjpeg/openjpeg-1.5.0.tar.gz"
+            ["libcddb-1.3.2.tar.bz2"]="https://download.videolan.org/testing/contrib/cddb/libcddb-1.3.2.tar.bz2"
+            ["chromaprint-1.0.tar.gz"]="https://download.videolan.org/contrib/chromaprint-1.0.tar.gz"
+            ["faad2-2.7.tar.gz"]="https://download.videolan.org/contrib/faad2/faad2-2.7.tar.gz"
+            ["libffi-3.0.13.tar.gz"]="https://download.videolan.org/testing/contrib/ffi/libffi-3.0.13.tar.gz"
+            ["fluidsynth-1.1.6.tar.bz2"]="https://download.videolan.org/contrib/fluid/fluidsynth-1.1.6.tar.bz2"
+            ["glew-1.7.0.tar.gz"]="https://download.videolan.org/testing/contrib/glew/glew-1.7.0.tar.gz"
+            ["glib-2.38.tar.xz"]="https://download.gnome.org/sources/glib/2.38/glib-2.38.0.tar.xz"
+            ["game-music-emu-0.6.0.tar.bz2"]="https://download.videolan.org/pub/contrib/gme/game-music-emu-0.6.0.tar.bz2"
+            ["growl-1.2.2.tar.bz2"]="https://download.videolan.org/testing/contrib/growl/growl-1.2.2.tar.bz2"
+            ["libkate-0.4.1.tar.gz"]="https://download.videolan.org/pub/pub/contrib/kate/libkate-0.4.1.tar.gz"
+            ["lame-3.99.5.tar.gz"]="https://download.videolan.org/pub/contrib/lame/lame-3.99.5.tar.gz"
+            ["mpg123-1.21.0.tar.bz2"]="https://download.videolan.org/contrib/mpg123/mpg123-1.21.0.tar.bz2"
+            ["libpng-1.6.19.tar.xz"]="https://download.videolan.org/pub/contrib/png/libpng-1.6.19.tar.xz"
+            ["projectM-2.0.1-Source.tar.gz"]="https://download.videolan.org/contrib/projectM/projectM-2.0.1-Source.tar.gz"
+            ["pthreads-w32-2-9-1-release.tar.gz"]="https://download.videolan.org/pub/contrib/pthreads/pthreads-w32-2-9-1-release.tar.gz"
+            ["sidplay-libs-2.1.1.tar.gz"]="https://download.videolan.org/pub/contrib/sidplay2/sidplay-libs-2.1.1.tar.gz"
+            ["soxr-0.1.2-Source.tar.xz"]="https://download.videolan.org/pub/contrib/soxr-0.1.2-Source.tar.xz"
+            ["tiff-4.0.3.tar.gz"]="https://download.videolan.org/contrib/tiff/tiff-4.0.3.tar.gz"
+            ["libtiger-0.3.1.tar.gz"]="https://download.videolan.org/pub/contrib/tiger/libtiger-0.3.1.tar.gz"
+            ["twolame-0.3.13.tar.gz"]="https://download.videolan.org/contrib/twolame/twolame-0.3.13.tar.gz"
+            ["libupnp-1.6.19.tar.bz2"]="https://download.videolan.org/contrib/upnp/libupnp-1.6.19.tar.bz2"
+            ["LibVNCServer-0.9.9.tar.gz"]="https://download.videolan.org/testing/contrib/vncclient/LibVNCServer-0.9.9.tar.gz"
+            ["zlib-1.2.8.tar.gz"]="https://download.videolan.org/pub/contrib/zlib/zlib-1.2.8.tar.gz"
+            ["zvbi-0.2.35.tar.bz2"]="https://download.videolan.org/contrib/zvbi/zvbi-0.2.35.tar.bz2"
+          )
           
           for F in "${!PKG_URLS[@]}"; do
               download "$F" "${PKG_URLS[$F]}"
@@ -310,7 +364,7 @@ jobs:
           # libass / freetype include patch — CORRECT FIX
           # ------------------------------------------------------
           echo "🔧 Patching libass freetype paths"
-          
+
           sed -i \
               's|ASS_CFLAGS =|ASS_CFLAGS = -I$$(PREFIX)/include -I$$(PREFIX)/include/freetype2 |' \
               vlc/contrib/src/ass/rules.mak
@@ -325,42 +379,45 @@ jobs:
           # ------------------------------------------------------
           echo "🔍 Locating GCC 4.9 cross toolchain..."
           
-          GCC49_BIN=$(find "$TIZEN_SDK/tools" -type f -name arm-linux-gnueabi-gcc | head -n 1)
+          # ------------------------------------------------------
+          # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
+          # ------------------------------------------------------
           
-          if [[ -z "$GCC49_BIN" ]]; then
-              echo "❌ FATAL: GCC 4.9 cross-compiler not found"
+          # GCC lives here (this is the real path)
+          GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          
+          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
+          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+          
+          if [[ ! -f "$GCC_BIN" ]]; then
+              echo "❌ FATAL: GCC 4.9 cross compiler not found in expected directory"
               exit 1
           fi
           
-          TOOLBIN=$(dirname "$GCC49_BIN")
-          GCCROOT=$(dirname "$TOOLBIN")
+          echo "✔ Using real GCC directory: $GCC_DIR"
           
-          # Clean up specs
-          clean_specs() {
-              BIN="$1/arm-linux-gnueabi-gcc"
-              SPECS="$1/specs-clean"
-              [[ ! -f "$BIN" ]] && return
+          # Clean the Samsung DIBS specs
+          GCC_SPECS="$GCC_DIR/specs-clean"
+          echo "🧹 Cleaning GCC specs..."
+          "$GCC_BIN" -dumpspecs > "$GCC_SPECS"
           
-              echo "🧹 Cleaning specs in $1"
-              "$BIN" -dumpspecs > "$SPECS"
+          # Remove poisoned Samsung include paths
+          sed -i '/\.dibs/d' "$GCC_SPECS"
+          sed -i '/srib-dibs-builder/d' "$GCC_SPECS"
           
-              sed -i '/\.dibs/d' "$SPECS"
-              sed -i '/srib-dibs-builder/d' "$SPECS"
+          echo "✔ Specs cleaned"
           
-              # Apply ONLY to the active directory
-              if [[ "$TOOLBIN" == "$1" ]]; then
-                  export CC="$BIN -specs=$SPECS"
-                  export CXX="$1/arm-linux-gnueabi-g++ -specs=$SPECS"
-              fi
-          }
+          # Apply the override
+          export CC="$GCC_BIN -specs=$GCC_SPECS"
+          export CXX="$GCC_PLUS_BIN -specs=$GCC_SPECS"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           
-          clean_specs "$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          clean_specs "$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          
-          export AR="$TOOLBIN/arm-linux-gnueabi-ar"
-          export LD="$TOOLBIN/arm-linux-gnueabi-ld"
-          export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
-          export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
+          # Add the toolchain to PATH
+          export PATH="$GCC_DIR:$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/libexec/gcc/arm-linux-gnueabi/4.9.2:$PATH"
+
           
           export PATH="$TOOLBIN:$GCCROOT/libexec/gcc/arm-linux-gnueabi/4.9.2:/usr/bin:/bin"
           
@@ -391,6 +448,29 @@ jobs:
           # ------------------------------------------------------
           echo "🛡 Environment sanitized — starting contrib build"
           export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+
+          echo "🔧 Removing Samsung DIBS paths from VLC contrib toolchain..."
+          
+          # Remove any hardcoded -I/root/.dibs/... includes
+          grep -Rl "/root/.dibs" vlc/contrib/src | while read -r f; do
+              sed -i 's|-I/root/.dibs[^ ]*||g' "$f"
+          done
+          
+          # Also remove them from auto-generated .pc and config files
+          grep -Rl "/root/.dibs" vlc/contrib | while read -r f; do
+              sed -i 's|/root/.dibs[^ ]*||g' "$f"
+          done
+
+          echo "🔧 Sanitizing CFLAGS/LDFLAGS injection from VLC contrib..."
+          
+          sed -i 's|CFLAGS += -I/usr/include||g' vlc/contrib/src/main.mak
+          sed -i 's|CPPFLAGS += -I/usr/include||g' vlc/contrib/src/main.mak
+          sed -i 's|CXXFLAGS += -I/usr/include||g' vlc/contrib/src/main.mak
+          
+          sed -i 's|CFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
+          sed -i 's|CPPFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
+          sed -i 's|CXXFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
+
           
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
