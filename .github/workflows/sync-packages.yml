@@ -410,21 +410,36 @@ jobs:
           export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
           export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
 
-          echo "🛠 Creating clean GCC specs (removing Samsung DIBS pollution)"
+          echo "🛠 Removing Samsung DIBS pollution from ALL GCC toolchains"
           
-          CLEAN_SPECS="$TOOLBIN/specs-clean"
+          # GCC DIR 1 (normal)
+          GCCDIR1="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          # GCC DIR 2 (data/tools — Samsung garbage)
+          GCCDIR2="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
           
-          # Dump default GCC specs to a writable file
-          "$CC" -dumpspecs > "$CLEAN_SPECS"
+          patch_specs_dir() {
+              local DIR="$1"
+              local GCCBIN="$DIR/arm-linux-gnueabi-gcc"
+              local SPECS="$DIR/specs-clean"
           
-          # Kill Samsung baked-in garbage
-          sed -i '/root\/.dibs/d' "$CLEAN_SPECS"
-          sed -i '/srib-dibs-builder/d' "$CLEAN_SPECS"
+              if [[ -f "$GCCBIN" ]]; then
+                  echo "🧹 Cleaning GCC specs in: $DIR"
+                  "$GCCBIN" -dumpspecs > "$SPECS"
+                  sed -i '/\.dibs/d' "$SPECS"
+                  sed -i '/srib-dibs-builder/d' "$SPECS"
           
-          # Apply the clean specs
-          export CC="$TOOLBIN/arm-linux-gnueabi-gcc -specs=$CLEAN_SPECS"
-          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ -specs=$CLEAN_SPECS"
+                  # Override CC/CXX when this is the active compiler directory
+                  if [[ "$TOOLBIN" == "$DIR" ]]; then
+                      export CC="$GCCBIN -specs=$SPECS"
+                      export CXX="$DIR/arm-linux-gnueabi-g++ -specs=$SPECS"
+                  fi
+              fi
+          }
           
+          patch_specs_dir "$GCCDIR1"
+          patch_specs_dir "$GCCDIR2"
+          
+          echo "✔ All compiler specs cleaned"          
           echo "✔ Clean GCC specs applied — checking..."
           grep -R "/root/.dibs" "$CLEAN_SPECS" || echo "👍 No DIBS paths remain"
 
