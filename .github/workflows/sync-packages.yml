@@ -382,8 +382,8 @@ jobs:
 
           echo "🔍 Locating GCC 4.9 toolchain..."
           
-          echo "📂 Toolchain listing:"
-          ls -R tizen-studio/tools
+          ls -R "$TIZEN_SDK/tools"
+
           
           GCC49_BIN=$(find "$TIZEN_SDK/tools" -type f -name arm-linux-gnueabi-gcc | head -n 1)
           
