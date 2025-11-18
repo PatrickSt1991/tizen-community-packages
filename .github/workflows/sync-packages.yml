@@ -369,10 +369,11 @@ jobs:
           export TARGET=arm-linux-gnueabi
           
           echo "🔍 Locating GCC 4.9 toolchain"
-          GCC49_BIN=$(find "$TIZEN_SDK" -maxdepth 8 -type f -name arm-linux-gnueabi-gcc | head -n 1)
+          GCC49_BIN=$(find "$TIZEN_SDK/tools/data" -type f -name arm-linux-gnueabi-gcc | head -n 1)
+          
+          # Fallback to normal GCC if needed
           if [[ -z "$GCC49_BIN" ]]; then
-              echo "❌ GCC not found"
-              exit 1
+              GCC49_BIN=$(find "$TIZEN_SDK/tools" -type f -name arm-linux-gnueabi-gcc | head -n 1)
           fi
           
           TOOLBIN=$(dirname "$GCC49_BIN")
@@ -389,8 +390,8 @@ jobs:
           
           # Ensure sysroot is enforced
           sed -i "s|*cpp:|*cpp:\n--sysroot=$SYSROOT|g" fixed-specs.txt
-          sed -i "s|*cc1:|*cc1:\n--sysroot=$SYSROOT|g" fixed-specs.txt
           sed -i "s|*link:|*link:\n--sysroot=$SYSROOT|g" fixed-specs.txt
+          sed -i '/--sysroot=.*$/d' fixed-specs.txt
           
           # Tell GCC to use fixed specs
           export GCC_SPECS="$(pwd)/fixed-specs.txt"
