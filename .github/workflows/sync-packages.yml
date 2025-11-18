@@ -378,14 +378,31 @@ jobs:
           TOOLBIN=$(dirname "$GCC49_BIN")
           echo "✔ GCC found at $GCC49_BIN"
           chmod -R +x "$TOOLBIN"
+
+          echo "🔧 Generating fixed GCC specs with correct SYSROOT"
+          
+          # Dump original specs using raw gcc (not $CC, because $CC not set yet)
+          "$TOOLBIN/arm-linux-gnueabi-gcc" -dumpspecs > fixed-specs.txt
+          
+          # Replace all references to poisoned Samsung OBS paths with the Tizen SYSROOT
+          sed -i "s|/root/.dibs[^ ]*|$SYSROOT|g" fixed-specs.txt
+          
+          # Ensure sysroot is enforced
+          sed -i "s|*cpp:|*cpp:\n--sysroot=$SYSROOT|g" fixed-specs.txt
+          sed -i "s|*cc1:|*cc1:\n--sysroot=$SYSROOT|g" fixed-specs.txt
+          sed -i "s|*link:|*link:\n--sysroot=$SYSROOT|g" fixed-specs.txt
+          
+          # Tell GCC to use fixed specs
+          export GCC_SPECS="$(pwd)/fixed-specs.txt"
+          export CC="$TOOLBIN/arm-linux-gnueabi-gcc -specs=$GCC_SPECS"
+          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ -specs=$GCC_SPECS"
+
           
           # Single PATH update only (bin + libexec)
           GCCROOT=$(dirname "$TOOLBIN")
           export PATH="$TOOLBIN:$GCCROOT/libexec/gcc/arm-linux-gnueabi/4.9.2:/usr/bin:/bin"
           
           # Correct sysroot-locked toolchain
-          export CC="$TOOLBIN/arm-linux-gnueabi-gcc"
-          export CXX="$TOOLBIN/arm-linux-gnueabi-g++"
           export AR="$TOOLBIN/arm-linux-gnueabi-ar"
           export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
           export LD="$TOOLBIN/arm-linux-gnueabi-ld"
