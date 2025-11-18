@@ -440,12 +440,29 @@ jobs:
           
           echo "🔧 Running buildall.sh"
 
-          echo "🔧 Removing SYSROOT include pollution for contrib"
-          export CPPFLAGS=""
-          export CFLAGS=""
-          export CXXFLAGS=""
-          export LDFLAGS=""
-          unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
+          echo "🧹 Purging poisoned Samsung DIBS GCC include paths"
+          unset GCC_EXEC_PREFIX
+          unset COMPILER_PATH
+          unset C_INCLUDE_PATH
+          unset CPLUS_INCLUDE_PATH
+          unset LIBRARY_PATH
+          
+          echo "🔧 Forcing GCC to use ONLY the Tizen toolchain"
+          export GCC_EXEC_PREFIX="$GCC49_DIR/lib/gcc/"
+          export COMPILER_PATH="$TOOLBIN"
+          export LIBRARY_PATH="$SYSROOT/usr/lib"
+          export C_INCLUDE_PATH="$SYSROOT/usr/include"
+          export CPLUS_INCLUDE_PATH="$SYSROOT/usr/include"
+          
+          echo "🔧 Sanitizing all compile flags for cross-build"
+          export CFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
+          export CPPFLAGS="$CFLAGS"
+          export CXXFLAGS="$CFLAGS"
+          export LDFLAGS="-L$SYSROOT/usr/lib"
+          
+          echo "🔧 Removing baked-in GCC garbage options"
+          export GCC_COLLECT_GCC_OPTIONS=""
+          export COLLECT_GCC=""
 
 
           ./buildall.sh -a armv7l || {
