@@ -380,9 +380,25 @@ jobs:
           export HOST=arm-linux-gnueabi
           export TARGET=arm-linux-gnueabi
 
-          # Always use the official Tizen 4.0 GCC 4.9 toolchain directory
-          GCC49_DIR="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9"
-          TOOLBIN="$GCC49_DIR/bin"
+          echo "🔍 Locating GCC 4.9 toolchain..."
+          
+          echo "📂 Toolchain listing:"
+          ls -R tizen-studio/tools
+          
+          GCC49_BIN=$(find "$TIZEN_SDK/tools" -type f -name arm-linux-gnueabi-gcc | head -n 1)
+          
+          if [[ -z "$GCC49_BIN" ]]; then
+              echo "❌ FATAL: GCC 4.9 cross-compiler not found"
+              find "$TIZEN_SDK/tools" -maxdepth 4 -type d -print
+              exit 1
+          fi
+          
+          echo "✔ Found GCC at: $GCC49_BIN"
+          
+          TOOLBIN=$(dirname "$GCC49_BIN")
+          GCC49_DIR=$(dirname "$TOOLBIN")
+          
+          chmod -R +x "$GCC49_DIR"
           
           export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
           export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
