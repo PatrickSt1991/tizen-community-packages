@@ -409,6 +409,25 @@ jobs:
           export LD="$TOOLBIN/arm-linux-gnueabi-ld"
           export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
           export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
+
+          echo "🛠 Creating clean GCC specs (removing Samsung DIBS pollution)"
+          
+          CLEAN_SPECS="$TOOLBIN/specs-clean"
+          
+          # Dump default GCC specs to a writable file
+          "$CC" -dumpspecs > "$CLEAN_SPECS"
+          
+          # Kill Samsung baked-in garbage
+          sed -i '/root\/.dibs/d' "$CLEAN_SPECS"
+          sed -i '/srib-dibs-builder/d' "$CLEAN_SPECS"
+          
+          # Apply the clean specs
+          export CC="$TOOLBIN/arm-linux-gnueabi-gcc -specs=$CLEAN_SPECS"
+          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ -specs=$CLEAN_SPECS"
+          
+          echo "✔ Clean GCC specs applied — checking..."
+          grep -R "/root/.dibs" "$CLEAN_SPECS" || echo "👍 No DIBS paths remain"
+
           
           # Add both GCC bin and libexec
           export PATH="$TOOLBIN:$GCC49_DIR/libexec/gcc/arm-linux-gnueabi/4.9.2:/usr/bin:/bin"
@@ -440,29 +459,7 @@ jobs:
           
           echo "🔧 Running buildall.sh"
 
-          echo "🧹 Purging poisoned Samsung DIBS GCC include paths"
-          unset GCC_EXEC_PREFIX
-          unset COMPILER_PATH
-          unset C_INCLUDE_PATH
-          unset CPLUS_INCLUDE_PATH
-          unset LIBRARY_PATH
-          
-          echo "🔧 Forcing GCC to use ONLY the Tizen toolchain"
-          export GCC_EXEC_PREFIX="$GCC49_DIR/lib/gcc/"
-          export COMPILER_PATH="$TOOLBIN"
-          export LIBRARY_PATH="$SYSROOT/usr/lib"
-          export C_INCLUDE_PATH="$SYSROOT/usr/include"
-          export CPLUS_INCLUDE_PATH="$SYSROOT/usr/include"
-          
-          echo "🔧 Sanitizing all compile flags for cross-build"
-          export CFLAGS="--sysroot=$SYSROOT -I$SYSROOT/usr/include"
-          export CPPFLAGS="$CFLAGS"
-          export CXXFLAGS="$CFLAGS"
-          export LDFLAGS="-L$SYSROOT/usr/lib"
-          
-          echo "🔧 Removing baked-in GCC garbage options"
-          export GCC_COLLECT_GCC_OPTIONS=""
-          export COLLECT_GCC=""
+
 
 
           ./buildall.sh -a armv7l || {
