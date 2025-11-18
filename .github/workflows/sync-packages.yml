@@ -403,8 +403,8 @@ jobs:
           
           chmod -R +x "$GCC49_DIR"
           
-          export CC="$TOOLBIN/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
-          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
+          export CC="$TOOLBIN/arm-linux-gnueabi-gcc"
+          export CXX="$TOOLBIN/arm-linux-gnueabi-g++"
           export AR="$TOOLBIN/arm-linux-gnueabi-ar"
           export LD="$TOOLBIN/arm-linux-gnueabi-ld"
           export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
@@ -439,6 +439,14 @@ jobs:
           export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
           
           echo "🔧 Running buildall.sh"
+
+          echo "🔧 Removing SYSROOT include pollution for contrib"
+          export CPPFLAGS=""
+          export CFLAGS=""
+          export CXXFLAGS=""
+          export LDFLAGS=""
+          unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
+
 
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
