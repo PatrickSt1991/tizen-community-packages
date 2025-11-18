@@ -367,47 +367,19 @@ jobs:
           export BUILD=x86_64-linux-gnu
           export HOST=arm-linux-gnueabi
           export TARGET=arm-linux-gnueabi
-          
+
           echo "🔍 Locating GCC 4.9 toolchain"
-          GCC49_BIN=$(find "$TIZEN_SDK/tools/data" -type f -name arm-linux-gnueabi-gcc | head -n 1)
-          
-          # Fallback to normal GCC if needed
-          if [[ -z "$GCC49_BIN" ]]; then
-              GCC49_BIN=$(find "$TIZEN_SDK/tools" -type f -name arm-linux-gnueabi-gcc | head -n 1)
-          fi
-          
+          GCC49_BIN=$(find "$TIZEN_SDK/tools" -type f -name arm-linux-gnueabi-gcc | head -n 1)
           TOOLBIN=$(dirname "$GCC49_BIN")
-          echo "✔ GCC found at $GCC49_BIN"
-          chmod -R +x "$TOOLBIN"
-
-          echo "🔧 Generating fixed GCC specs with correct SYSROOT"
           
-          # Dump original specs using raw gcc (not $CC, because $CC not set yet)
-          "$TOOLBIN/arm-linux-gnueabi-gcc" -dumpspecs > fixed-specs.txt
+          export CC="$GCC49_BIN --sysroot=$SYSROOT"
+          export CXX="${GCC49_BIN/%gcc/g++} --sysroot=$SYSROOT"
+          export AR="${GCC49_BIN/%gcc/ar}"
+          export RANLIB="${GCC49_BIN/%gcc/ranlib}"
+          export LD="${GCC49_BIN/%gcc/ld}"
+          export STRIP="${GCC49_BIN/%gcc/strip}"
           
-          # Replace all references to poisoned Samsung OBS paths with the Tizen SYSROOT
-          sed -i "s|/root/.dibs[^ ]*|$SYSROOT|g" fixed-specs.txt
-          
-          # Ensure sysroot is enforced
-          sed -i "s|*cpp:|*cpp:\n--sysroot=$SYSROOT|g" fixed-specs.txt
-          sed -i "s|*link:|*link:\n--sysroot=$SYSROOT|g" fixed-specs.txt
-          sed -i '/--sysroot=.*$/d' fixed-specs.txt
-          
-          # Tell GCC to use fixed specs
-          export GCC_SPECS="$(pwd)/fixed-specs.txt"
-          export CC="$TOOLBIN/arm-linux-gnueabi-gcc -specs=$GCC_SPECS"
-          export CXX="$TOOLBIN/arm-linux-gnueabi-g++ -specs=$GCC_SPECS"
-
-          
-          # Single PATH update only (bin + libexec)
-          GCCROOT=$(dirname "$TOOLBIN")
-          export PATH="$TOOLBIN:$GCCROOT/libexec/gcc/arm-linux-gnueabi/4.9.2:/usr/bin:/bin"
-          
-          # Correct sysroot-locked toolchain
-          export AR="$TOOLBIN/arm-linux-gnueabi-ar"
-          export RANLIB="$TOOLBIN/arm-linux-gnueabi-ranlib"
-          export LD="$TOOLBIN/arm-linux-gnueabi-ld"
-          export STRIP="$TOOLBIN/arm-linux-gnueabi-strip"
+          export PATH="$TOOLBIN:$(dirname "$TOOLBIN")/libexec/gcc/arm-linux-gnueabi/4.9.2:/usr/bin:/bin"
           
           # pkg-config wrapper for sysroot
           export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
