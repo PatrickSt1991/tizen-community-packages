@@ -365,8 +365,8 @@ jobs:
           echo "🧹 Removing previous contrib build (avoids poisoned include paths)..."
           rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
           
-          echo "🔧 Patching libass FreeType include paths"
-          sed -i 's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 |' \
+          echo "🔧 Overriding libass include paths (correct sysroot handling)"
+          sed -i 's|ASS_CFLAGS =|ASS_CFLAGS = -I$$(PREFIX)/include -I$$(PREFIX)/include/freetype2 |' \
               vlc/contrib/src/ass/rules.mak
           
           # Add the second required include root
