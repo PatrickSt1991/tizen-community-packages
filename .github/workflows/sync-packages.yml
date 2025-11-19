@@ -507,6 +507,9 @@ jobs:
           else
             echo "⚠️ libc script not found at $LIBC_SCRIPT (layout different than expected)"
           fi
+          
+          echo "🔧 Updating PATH to use ARM binutils first"
+          export PATH="$GCC_DIR:$PATH"
 
           echo "🔎 Active GCC specs:"
           $CC -v 2>&1 | grep specs || true
