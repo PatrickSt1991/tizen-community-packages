@@ -485,6 +485,28 @@ jobs:
           sed -i 's|CFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
           sed -i 's|CPPFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
           sed -i 's|CXXFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
+
+          echo "==== GCC CROSS-COMPILER SELF-TEST ===="
+          echo "CC = $CC"
+          echo "SYSROOT = $SYSROOT"
+          echo "GCC_DIR = $GCC_DIR"
+          
+          # Move into a safe directory
+          cd vlc || true
+          
+          echo 'int main(){return 0;}' > test.c
+          
+          echo "==== Running: $CC test.c -o test.out -v ===="
+          $CC test.c -o test.out -v || {
+            echo "❌ CROSS-COMPILER FAILED — THIS IS WHY configure SAYS 'cannot create executables'"
+            echo "Stopping early so we can read the compiler output."
+            exit 1
+          }
+          
+          echo "==== SUCCESS: cross compiler created test.out ===="
+          ls -l test.out || true
+          
+          cd ..
           
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
