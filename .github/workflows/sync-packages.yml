@@ -390,6 +390,28 @@ jobs:
           # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
 
+          # ============================================================
+          # FIX: Autoconf configure tests must use NATIVE tools, not ARM
+          # ============================================================
+          
+          # Native tools (used for configure tests, AC_RUN, AC_CHECK)
+          export AS=as
+          export LD=ld
+          export AR=ar
+          export NM=nm
+          export RANLIB=ranlib
+          export STRIP=strip
+          
+          export CC_FOR_BUILD=gcc
+          export CXX_FOR_BUILD=g++
+          export CPP_FOR_BUILD=cpp
+          export LD_FOR_BUILD=ld
+          export AS_FOR_BUILD=as
+          export AR_FOR_BUILD=ar
+          export NM_FOR_BUILD=nm
+          export RANLIB_FOR_BUILD=ranlib
+          export STRIP_FOR_BUILD=strip
+          
           GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
@@ -442,30 +464,9 @@ jobs:
           echo "=========================================="
 
           # Export patched compiler wrappers
+          
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
-
-          # ============================================================
-          # FIX: Autoconf configure tests must use NATIVE tools, not ARM
-          # ============================================================
-          
-          # Native tools (used for configure tests, AC_RUN, AC_CHECK)
-          export AS=as
-          export LD=ld
-          export AR=ar
-          export NM=nm
-          export RANLIB=ranlib
-          export STRIP=strip
-          
-          export CC_FOR_BUILD=gcc
-          export CXX_FOR_BUILD=g++
-          export CPP_FOR_BUILD=cpp
-          export LD_FOR_BUILD=ld
-          export AS_FOR_BUILD=as
-          export AR_FOR_BUILD=ar
-          export NM_FOR_BUILD=nm
-          export RANLIB_FOR_BUILD=ranlib
-          export STRIP_FOR_BUILD=strip
                     
           # -------------------------
           #  ADD THESE DEBUG LINES
@@ -514,7 +515,15 @@ jobs:
             echo "⚠️ libc script not found at $LIBC_SCRIPT (layout different than expected)"
           fi
 
+          echo "🔧 Forcing ARM binutils for actual cross compilation"
           
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+
           echo "==== GCC CROSS-COMPILER SELF-TEST ===="
           echo "CC = $CC"
           echo "SYSROOT = $SYSROOT"
