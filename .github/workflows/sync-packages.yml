@@ -382,18 +382,15 @@ jobs:
           # ------------------------------------------------------
           # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
-
-          # ============================================================
-          # FIX: Autoconf configure tests must use NATIVE tools, not ARM
-          # ============================================================
           
-          # Native tools (used for configure tests, AC_RUN, AC_CHECK)
-          export AS=as
-          export LD=ld
-          export AR=ar
-          export NM=nm
-          export RANLIB=ranlib
-          export STRIP=strip
+          # ARM cross binutils
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+
           
           export CC_FOR_BUILD=gcc
           export CXX_FOR_BUILD=g++
