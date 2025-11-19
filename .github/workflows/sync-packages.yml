@@ -451,15 +451,21 @@ jobs:
 
           echo "🔧 Removing Samsung DIBS paths from VLC contrib toolchain..."
           
-          # Remove any hardcoded -I/root/.dibs/... includes
-          grep -Rl "/root/.dibs" vlc/contrib/src | while read -r f; do
-              sed -i 's|-I/root/.dibs[^ ]*||g' "$f"
-          done
+          # Broad search for any DIBS contamination
+          grep -RIl "dibs" vlc/contrib/src --exclude-dir=.git --exclude="*.tar.gz" 2>/dev/null | while read -r f; do
+              echo "⚠️  Cleaning DIBS paths in: $f"
+              sed -i 's|-I/root/\.dibs[^ ]*||g' "$f"
+              sed -i 's|/root/\.dibs[^ ]*||g' "$f"
+              sed -i 's|dibs[^ ]*||g' "$f"   # catch weird Samsung builder strings
+          done || true
           
-          # Also remove them from auto-generated .pc and config files
-          grep -Rl "/root/.dibs" vlc/contrib | while read -r f; do
-              sed -i 's|/root/.dibs[^ ]*||g' "$f"
-          done
+          grep -RIl "dibs" vlc/contrib --exclude-dir=.git --exclude="*.tar.gz" 2>/dev/null | while read -r f; do
+              echo "⚠️  Cleaning DIBS paths in: $f"
+              sed -i 's|-I/root/\.dibs[^ ]*||g' "$f"
+              sed -i 's|/root/\.dibs[^ ]*||g' "$f"
+              sed -i 's|dibs[^ ]*||g' "$f"
+          done || true
+
 
           echo "🔧 Sanitizing CFLAGS/LDFLAGS injection from VLC contrib..."
           
