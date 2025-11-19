@@ -223,13 +223,6 @@ jobs:
           echo "📌 cc1 permissions:"
           find tizen-studio -name cc1 -exec ls -l {} \;
 
-      - name: Fix toolchain permissions after artifact restore
-        run: |
-          echo "🔧 Restoring execute bits for GCC toolchain"
-          find tizen-studio -type f -path "*/bin/arm-linux-gnueabi-*" -exec chmod +x {} \;
-          find tizen-studio -type f -path "*/libexec/gcc/*/cc1" -exec chmod +x {} \;
-          find tizen-studio -type f -path "*/libexec/gcc/*/cc1plus" -exec chmod +x {} \;
-
       - name: Install 32-bit compatibility libs (fix cross-toolchain execution)
         run: |
           sudo dpkg --add-architecture i386
@@ -515,19 +508,6 @@ jobs:
             echo "⚠️ libc script not found at $LIBC_SCRIPT (layout different than expected)"
           fi
 
-          echo "🔧 Forcing ARM binutils for actual cross compilation"
-          
-          export AS="$GCC_DIR/arm-linux-gnueabi-as"
-          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
-          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-
-          echo "==== GCC CROSS-COMPILER SELF-TEST ===="
-          echo "CC = $CC"
-          echo "SYSROOT = $SYSROOT"
-
           echo "🔎 Active GCC specs:"
           $CC -v 2>&1 | grep specs || true
 
@@ -609,7 +589,7 @@ jobs:
           ls -l test.out || true
           
           cd ..
-          
+          export PATH="$GCC_DIR:$PATH"
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
 
