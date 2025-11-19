@@ -277,8 +277,7 @@ jobs:
           export TIZEN_API=4.0
           export TIZEN_ABI=armv7l
           export TARGET_TUPLE=arm-linux-gnueabi
-          
-          export CROSS_COMPILE="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-"
+
           export TIZEN_INCLUDES="$SYSROOT/usr/include"
           export TIZEN_LIBS="$SYSROOT/usr/lib"
 
@@ -386,50 +385,50 @@ jobs:
           sed -i \
               's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 |' \
               vlc/contrib/src/ass/rules.mak
-          
-          # ------------------------------------------------------
-          # CLEAN CROSS COMPILER: remove Samsung DIBS contamination
-          # ------------------------------------------------------
-          echo "🔍 Locating GCC 4.9 cross toolchain..."
-          
+
           # ------------------------------------------------------
           # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
-          
-          # GCC lives here (this is the real path)
+
           GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-          
+
           if [[ ! -f "$GCC_BIN" ]]; then
-              echo "❌ FATAL: GCC 4.9 cross compiler not found in expected directory"
+              echo "❌ GCC 4.9 compiler not found"
               exit 1
           fi
-          
-          echo "✔ Using real GCC directory: $GCC_DIR"
-          
-          # Clean the Samsung DIBS specs
-          GCC_SPECS="$GCC_DIR/specs-clean"
-          echo "🧹 Cleaning GCC specs..."
-          "$GCC_BIN" -dumpspecs > "$GCC_SPECS"
-          
-          # Remove poisoned Samsung include paths
-          sed -i '/\.dibs/d' "$GCC_SPECS"
-          sed -i '/srib-dibs-builder/d' "$GCC_SPECS"
-          
-          echo "✔ Specs cleaned"
-          
-          # Apply the override
-          export CC="$GCC_BIN -specs=$GCC_SPECS"
-          export CXX="$GCC_PLUS_BIN -specs=$GCC_SPECS"
+
+          echo "✔ Using GCC directory: $GCC_DIR"
+
+          # ------------------------------------------------------
+          # IMPORTANT: specs-clean DOES NOT WORK for this GCC
+          # GCC only honors TARGET.specs located in the same dir
+          # ------------------------------------------------------
+
+          REAL_SPECS="$GCC_DIR/arm-linux-gnueabi.specs"
+
+          echo "🧹 Rebuilding clean GCC specs at: $REAL_SPECS"
+
+          "$GCC_BIN" -dumpspecs \
+              | sed '/\.dibs/d' \
+              | sed '/srib-dibs-builder/d' \
+              > "$REAL_SPECS"
+
+          # Export patched compiler wrappers
+          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+
           export AR="$GCC_DIR/arm-linux-gnueabi-ar"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-          
-          # Add the toolchain to PATH
-          export PATH="$GCC_DIR:$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/libexec/gcc/arm-linux-gnueabi/4.9.2:$PATH"
+
+          export PATH="$GCC_DIR:$PATH"
+
+          echo "🔎 Active GCC specs:"
+          $CC -v 2>&1 | grep specs || true
+
           
           # ------------------------------------------------------
           # Disable AC_RUN_IFELSE and AC_TRY_RUN for cross compile
