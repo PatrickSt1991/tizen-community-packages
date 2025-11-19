@@ -452,6 +452,15 @@ jobs:
           export NM="$GCC_DIR/arm-linux-gnueabi-nm"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+
+          export CC_FOR_BUILD=gcc
+          export CXX_FOR_BUILD=g++
+          export CPP_FOR_BUILD=cpp
+          export LD_FOR_BUILD=ld
+          export AS_FOR_BUILD=as
+          export AR_FOR_BUILD=ar
+          export RANLIB_FOR_BUILD=ranlib
+          export STRIP_FOR_BUILD=strip
           
           # Make sure these override system binutils
           export PATH="$GCC_DIR:$PATH"
