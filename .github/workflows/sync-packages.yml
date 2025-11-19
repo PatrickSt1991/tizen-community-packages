@@ -445,26 +445,28 @@ jobs:
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
 
-          # Force the correct ARM binutils
-          export AS="$GCC_DIR/arm-linux-gnueabi-as"
-          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
-          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-
+          # ============================================================
+          # FIX: Autoconf configure tests must use NATIVE tools, not ARM
+          # ============================================================
+          
+          # Native tools (used for configure tests, AC_RUN, AC_CHECK)
+          export AS=as
+          export LD=ld
+          export AR=ar
+          export NM=nm
+          export RANLIB=ranlib
+          export STRIP=strip
+          
           export CC_FOR_BUILD=gcc
           export CXX_FOR_BUILD=g++
           export CPP_FOR_BUILD=cpp
           export LD_FOR_BUILD=ld
           export AS_FOR_BUILD=as
           export AR_FOR_BUILD=ar
+          export NM_FOR_BUILD=nm
           export RANLIB_FOR_BUILD=ranlib
           export STRIP_FOR_BUILD=strip
-          
-          # Make sure these override system binutils
-          export PATH="$GCC_DIR:$PATH"
-
+                    
           # -------------------------
           #  ADD THESE DEBUG LINES
           # -------------------------
