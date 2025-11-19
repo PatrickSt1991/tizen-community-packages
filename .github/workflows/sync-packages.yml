@@ -476,6 +476,16 @@ jobs:
           export RANLIB_FOR_BUILD=ranlib
           export STRIP_FOR_BUILD=strip
 
+          # 🔧 FIX: Restore NATIVE PATH so freetype host tools work
+          ORIG_PATH="$PATH"
+          echo "🔧 Restoring native PATH (ensuring native as/ld are used)"
+          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$ORIG_PATH"
+          
+          which as
+          as --version || true
+          which ld
+          ld --version || true
+
                     
           # -------------------------
           #  ADD THESE DEBUG LINES
@@ -524,8 +534,8 @@ jobs:
             echo "⚠️ libc script not found at $LIBC_SCRIPT (layout different than expected)"
           fi
           
-          echo "🔧 Updating PATH to use ARM binutils first"
-          export PATH="$GCC_DIR:$PATH"
+          #echo "🔧 Updating PATH to use ARM binutils first"
+          #export PATH="$GCC_DIR:$PATH"
 
           echo "🔎 Active GCC specs:"
           $CC -v 2>&1 | grep specs || true
