@@ -447,6 +447,10 @@ jobs:
           echo "which ld: $(which ld)"
           ld --version || true
           echo "=========================="
+
+          echo "Searching for Tizen libc:"
+          find $SYSROOT -name "libc.so*" -maxdepth 4 || true
+          find $SYSROOT -name "ld-linux*.so*" -maxdepth 4 || true
           # -------------------------
           
           echo "==== GCC CROSS-COMPILER SELF-TEST ===="
