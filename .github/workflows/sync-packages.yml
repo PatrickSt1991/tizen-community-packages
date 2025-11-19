@@ -462,12 +462,7 @@ jobs:
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
 
           echo "🔧 Restoring native toolchain for build-time tools"
-          export AS=as
-          export LD=ld
-          export AR=ar
-          export NM=nm
-          export RANLIB=ranlib
-          export STRIP=strip
+          unset AS LD AR NM RANLIB STRIP
           
           export AS_FOR_BUILD=as
           export LD_FOR_BUILD=ld
@@ -480,6 +475,8 @@ jobs:
           ORIG_PATH="$PATH"
           echo "🔧 Restoring native PATH (ensuring native as/ld are used)"
           export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$ORIG_PATH"
+          echo "🔧 Fixing AS overrides (must not force native AS for ARM code)"
+          unset AS LD AR NM RANLIB STRIP
           
           which as
           as --version || true
