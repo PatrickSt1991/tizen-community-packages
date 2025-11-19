@@ -423,11 +423,15 @@ jobs:
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
 
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          # Force the correct ARM binutils
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          
+          # Make sure these override system binutils
           export PATH="$GCC_DIR:$PATH"
 
           echo "🔎 Active GCC specs:"
