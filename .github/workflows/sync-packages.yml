@@ -422,6 +422,10 @@ jobs:
               | sed '/srib-dibs-builder/d' \
               > "$REAL_SPECS"
 
+          echo "==== DUMPING arm-linux-gnueabi.specs ===="
+          cat "$REAL_SPECS"
+          echo "=========================================="
+
           # Export patched compiler wrappers
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
