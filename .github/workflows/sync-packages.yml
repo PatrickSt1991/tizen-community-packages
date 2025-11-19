@@ -269,6 +269,19 @@ jobs:
           SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           export SYSROOT
           echo "🔧 Using sysroot: $SYSROOT"
+
+          export TIZEN_SDK_VERSION=4.0
+          export TIZEN_SDK_SHORT_VERSION=4.0
+          export TIZEN_SDK_MAJOR=4
+          export TIZEN_SDK_MINOR=0
+          export TIZEN_API=4.0
+          export TIZEN_ABI=armv7l
+          export TARGET_TUPLE=arm-linux-gnueabi
+          
+          export CROSS_COMPILE="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-"
+          export TIZEN_INCLUDES="$SYSROOT/usr/include"
+          export TIZEN_LIBS="$SYSROOT/usr/lib"
+
           
           # Force correct SDK identifiers
           printf '%s\n' "4.0" > "$TIZEN_SDK/sdk.version"
@@ -417,9 +430,6 @@ jobs:
           
           # Add the toolchain to PATH
           export PATH="$GCC_DIR:$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/libexec/gcc/arm-linux-gnueabi/4.9.2:$PATH"
-
-          
-          export PATH="$TOOLBIN:$GCCROOT/libexec/gcc/arm-linux-gnueabi/4.9.2:/usr/bin:/bin"
           
           # ------------------------------------------------------
           # Disable AC_RUN_IFELSE and AC_TRY_RUN for cross compile
@@ -476,20 +486,6 @@ jobs:
           sed -i 's|CFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
           sed -i 's|CPPFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
           sed -i 's|CXXFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
-
-          export TIZEN_SDK_VERSION=4.0
-          export TIZEN_SDK_SHORT_VERSION=4.0
-          export TIZEN_SDK_MAJOR=4
-          export TIZEN_SDK_MINOR=0
-          export TIZEN_API=4.0
-          export TIZEN_ABI=armv7l
-          export TARGET_TUPLE=arm-linux-gnueabi
-          export CROSS_COMPILE=$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin/arm-linux-gnueabi-
-          export SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          
-          export TIZEN_INCLUDES="$SYSROOT/usr/include"
-          export TIZEN_LIBS="$SYSROOT/usr/lib"
-
           
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
