@@ -422,6 +422,21 @@ jobs:
               | sed '/srib-dibs-builder/d' \
               > "$REAL_SPECS"
 
+          echo "🔧 Patching specs to use SYSROOT dynamic linker"
+          
+          # Replace hardcoded /lib/ld-linux.so.3 with SYSROOT version
+          sed -i "s|/lib/ld-linux.so.3|$SYSROOT/lib/ld-linux.so.3|g" "$REAL_SPECS"
+          sed -i "s|/lib/ld-linux-armhf.so.3|$SYSROOT/lib/ld-linux-armhf.so.3|g" "$REAL_SPECS"
+          
+          # Replace hardcoded libc paths
+          sed -i "s|/lib/libc.so.6|$SYSROOT/lib/libc.so.6|g" "$REAL_SPECS"
+          sed -i "s|/usr/lib/libc_nonshared.a|$SYSROOT/usr/lib/libc_nonshared.a|g" "$REAL_SPECS"
+          
+          echo "==== Patched specs (link section) ===="
+          grep -R "ld-linux" -n "$REAL_SPECS" || true
+          echo "======================================"
+
+
           echo "==== DUMPING arm-linux-gnueabi.specs ===="
           cat "$REAL_SPECS"
           echo "=========================================="
