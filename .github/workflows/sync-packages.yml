@@ -382,6 +382,24 @@ jobs:
           # ------------------------------------------------------
           # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
+
+          GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
+          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+
+          echo "==== TOOLCHAIN BINARIES ===="
+          ls -l "$GCC_DIR" || true
+
+          if [[ ! -f "$GCC_BIN" ]]; then
+              echo "❌ GCC 4.9 compiler not found"
+              exit 1
+          fi
+
+          echo "✔ Using GCC directory: $GCC_DIR"
+          export PATH="$GCC_DIR:$PATH"
+          echo "🔧 PATH updated to prefer ARM toolchain"
+          which arm-linux-gnueabi-ar || true
+          which arm-linux-gnueabi-gcc || true
           
           # ARM cross binutils
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
@@ -402,21 +420,6 @@ jobs:
           export RANLIB_FOR_BUILD=ranlib
           export STRIP_FOR_BUILD=strip
           
-          GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-
-          echo "==== TOOLCHAIN BINARIES ===="
-          ls -l "$GCC_DIR" || true
-
-
-          if [[ ! -f "$GCC_BIN" ]]; then
-              echo "❌ GCC 4.9 compiler not found"
-              exit 1
-          fi
-
-          echo "✔ Using GCC directory: $GCC_DIR"
-
           # ------------------------------------------------------
           # IMPORTANT: specs-clean DOES NOT WORK for this GCC
           # GCC only honors TARGET.specs located in the same dir
