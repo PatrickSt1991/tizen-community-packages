@@ -460,6 +460,22 @@ jobs:
           
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+
+          echo "🔧 Restoring native toolchain for build-time tools"
+          export AS=as
+          export LD=ld
+          export AR=ar
+          export NM=nm
+          export RANLIB=ranlib
+          export STRIP=strip
+          
+          export AS_FOR_BUILD=as
+          export LD_FOR_BUILD=ld
+          export AR_FOR_BUILD=ar
+          export NM_FOR_BUILD=nm
+          export RANLIB_FOR_BUILD=ranlib
+          export STRIP_FOR_BUILD=strip
+
                     
           # -------------------------
           #  ADD THESE DEBUG LINES
