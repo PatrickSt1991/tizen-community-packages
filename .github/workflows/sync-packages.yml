@@ -481,6 +481,28 @@ jobs:
           find $SYSROOT -name "libc.so*" -maxdepth 4 || true
           find $SYSROOT -name "ld-linux*.so*" -maxdepth 4 || true
           # -------------------------
+
+          echo "🔧 Patching libc linker script for absolute paths"
+          LIBC_SCRIPT="$SYSROOT/usr/lib/libc.so"
+          
+          if [[ -f "$LIBC_SCRIPT" ]]; then
+            echo "  → Found libc script at: $LIBC_SCRIPT"
+            echo "    (before patch) first lines:"
+            head -n 10 "$LIBC_SCRIPT" || true
+          
+            # Rewrite absolute paths inside the linker script to point into the SYSROOT
+            sed -i "s|/lib/libc.so.6|$SYSROOT/lib/libc.so.6|g" "$LIBC_SCRIPT"
+            sed -i "s|/usr/lib/libc_nonshared.a|$SYSROOT/usr/lib/libc_nonshared.a|g" "$LIBC_SCRIPT"
+            sed -i "s|/lib/ld-linux.so.3|$SYSROOT/lib/ld-linux.so.3|g" "$LIBC_SCRIPT"
+          
+            echo "    (after patch) lines mentioning libc/ld-linux:"
+            grep -n "libc.so.6" "$LIBC_SCRIPT" || true
+            grep -n "libc_nonshared.a" "$LIBC_SCRIPT" || true
+            grep -n "ld-linux.so.3" "$LIBC_SCRIPT" || true
+          else
+            echo "⚠️ libc script not found at $LIBC_SCRIPT (layout different than expected)"
+          fi
+
           
           echo "==== GCC CROSS-COMPILER SELF-TEST ===="
           echo "CC = $CC"
