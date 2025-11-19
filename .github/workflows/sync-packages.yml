@@ -394,6 +394,10 @@ jobs:
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
 
+          echo "==== TOOLCHAIN BINARIES ===="
+          ls -l "$GCC_DIR" || true
+
+
           if [[ ! -f "$GCC_BIN" ]]; then
               echo "❌ GCC 4.9 compiler not found"
               exit 1
