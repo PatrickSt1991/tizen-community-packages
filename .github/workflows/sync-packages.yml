@@ -448,6 +448,16 @@ jobs:
           ld --version || true
           echo "=========================="
 
+          echo "==== Searching for Tizen libc inside SYSROOT ===="
+          echo "SYSROOT = $SYSROOT"
+      
+          echo "-- libc.so* --"
+          find "$SYSROOT" -name "libc.so*" -maxdepth 4 || true
+      
+          echo "-- ld-linux*.so* --"
+          find "$SYSROOT" -name "ld-linux*.so*" -maxdepth 4 || true
+          echo "==============================================="
+
           echo "Searching for Tizen libc:"
           find $SYSROOT -name "libc.so*" -maxdepth 4 || true
           find $SYSROOT -name "ld-linux*.so*" -maxdepth 4 || true
