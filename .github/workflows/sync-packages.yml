@@ -410,6 +410,9 @@ jobs:
           # GCC only honors TARGET.specs located in the same dir
           # ------------------------------------------------------
 
+          echo "🔗 Forcing cross binutils via symlinks"
+          ln -sf "$GCC_DIR/arm-linux-gnueabi-as" "$GCC_DIR/as"
+          ln -sf "$GCC_DIR/arm-linux-gnueabi-ld" "$GCC_DIR/ld"
           REAL_SPECS="$GCC_DIR/arm-linux-gnueabi.specs"
 
           echo "🧹 Rebuilding clean GCC specs at: $REAL_SPECS"
@@ -433,6 +436,22 @@ jobs:
           
           # Make sure these override system binutils
           export PATH="$GCC_DIR:$PATH"
+
+          # -------------------------
+          #  ADD THESE DEBUG LINES
+          # -------------------------
+          echo "🔍 Checking which assembler is being used"
+          echo "which as: $(which as)"
+          as --version || true
+          echo "----"
+          echo "which ld: $(which ld)"
+          ld --version || true
+          echo "=========================="
+          # -------------------------
+          
+          echo "==== GCC CROSS-COMPILER SELF-TEST ===="
+          echo "CC = $CC"
+          echo "SYSROOT = $SYSROOT"
 
           echo "🔎 Active GCC specs:"
           $CC -v 2>&1 | grep specs || true
