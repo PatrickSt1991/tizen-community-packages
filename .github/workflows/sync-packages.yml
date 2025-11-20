@@ -460,23 +460,6 @@ jobs:
           
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
-
-          echo "🔧 Restoring native toolchain for build-time tools"
-          unset AS LD AR NM RANLIB STRIP
-          
-          export AS_FOR_BUILD=as
-          export LD_FOR_BUILD=ld
-          export AR_FOR_BUILD=ar
-          export NM_FOR_BUILD=nm
-          export RANLIB_FOR_BUILD=ranlib
-          export STRIP_FOR_BUILD=strip
-
-          # 🔧 FIX: Restore NATIVE PATH so freetype host tools work
-          ORIG_PATH="$PATH"
-          echo "🔧 Restoring native PATH (ensuring native as/ld are used)"
-          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$ORIG_PATH"
-          echo "🔧 Fixing AS overrides (must not force native AS for ARM code)"
-          unset AS LD AR NM RANLIB STRIP
           
           which as
           as --version || true
@@ -613,6 +596,23 @@ jobs:
           
           echo "==== SUCCESS: cross compiler created test.out ===="
           ls -l test.out || true
+
+          echo "🔧 Restoring native toolchain for build-time tools"
+          unset AS LD AR NM RANLIB STRIP
+          
+          export AS_FOR_BUILD=as
+          export LD_FOR_BUILD=ld
+          export AR_FOR_BUILD=ar
+          export NM_FOR_BUILD=nm
+          export RANLIB_FOR_BUILD=ranlib
+          export STRIP_FOR_BUILD=strip
+
+          # 🔧 FIX: Restore NATIVE PATH so freetype host tools work
+          ORIG_PATH="$PATH"
+          echo "🔧 Restoring native PATH (ensuring native as/ld are used)"
+          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$ORIG_PATH"
+          echo "🔧 Fixing AS overrides (must not force native AS for ARM code)"
+          unset AS LD AR NM RANLIB STRIP
           
           cd ..
           export PATH="$GCC_DIR:$PATH"
