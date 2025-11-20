@@ -1,7 +1,7 @@
-diff --git a/vlc/contrib/src/freetype2/rules.mak b/vlc/contrib/src/freetype2/rules.mak
+diff --git a/contrib/src/freetype2/rules.mak b/contrib/src/freetype2/rules.mak
 index 2222222..3333333 100644
---- a/vlc/contrib/src/freetype2/rules.mak
-+++ b/vlc/contrib/src/freetype2/rules.mak
+--- a/contrib/src/freetype2/rules.mak
++++ b/contrib/src/freetype2/rules.mak
 @@ -10,7 +10,7 @@ FREETYPE_CONF = \
         --without-png \
         --without-harfbuzz
