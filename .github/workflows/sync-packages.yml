@@ -285,20 +285,24 @@ jobs:
               git checkout 4e0fa1b
               cd ..
           fi
-          
           echo "📌 Applying VLC patches..."
           
-          # cd into REAL VLC source (not parent wrapper)
-          cd vlc/vlc
+          # We are already inside: build/vlc-tizen
+          cd vlc   # this is the REAL VLC clone
           
-          # Apply patches (absolute paths prevent mistakes)
+          echo "📍 Current dir:"
+          pwd
+          echo "📁 Listing:"
+          ls -al
+          
+          # Apply patches
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-libass.patch"
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-freetype.patch"
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-buildvlc.patch"
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-clean-dibs.patch" || true
           
-          cd ../..
-          echo "✔ All patches applied correctly"
+          cd ..
+          echo "✔ All patches applied successfully"
           
           # ------------------------------------------------------
           # Pre-seed contrib tarballs
