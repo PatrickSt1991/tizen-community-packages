@@ -1,0 +1,11 @@
+diff --git a/vlc/contrib/src/ass/rules.mak b/vlc/contrib/src/ass/rules.mak
+index 1111111..2222222 100644
+--- a/vlc/contrib/src/ass/rules.mak
++++ b/vlc/contrib/src/ass/rules.mak
+@@ -1,7 +1,10 @@
+ 
+-ASS_CFLAGS =
++ASS_CFLAGS = -I$$(PREFIX)/include -I$$(PREFIX)/include/freetype2 
+
+-FREETYPE_CFLAGS="
++FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 
