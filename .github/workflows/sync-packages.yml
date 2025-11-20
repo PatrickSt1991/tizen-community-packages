@@ -283,7 +283,7 @@ jobs:
               git clone https://code.videolan.org/videolan/vlc.git vlc
               pushd vlc
               git checkout 4e0fa1b
-              cd..
+              cd ..
           fi
 
           echo "📌 Applying VLC patches..."
