@@ -3,7 +3,7 @@ index 444444..555555 100755
 --- a/buildvlc.sh
 +++ b/buildvlc.sh
 @@ -45,6 +45,22 @@ echo "Preparing contrib..."
-
+ 
 +# --------------- FORCE NATIVE TOOLCHAIN FOR CONTRIB BUILD ---------------
 +echo "🔧 Forcing native toolchain for contrib"
 +unset CC CXX LD AS AR NM RANLIB STRIP
@@ -19,7 +19,7 @@ index 444444..555555 100755
 +# ------------------------------------------------------------------------
 +
 @@ -140,6 +156,20 @@ CONFIGURE_FLAGS="$CONFIGURE_FLAGS --enable-some-option"
-
+ 
 +# --------------- SWITCH TO ARM CROSS-TOOLCHAIN FOR VLC CORE ---------------
 +echo "🔧 Switching to ARM cross-compiler for VLC core"
 +export PATH="$GCC_DIR:$PATH"
