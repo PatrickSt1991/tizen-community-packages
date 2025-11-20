@@ -644,10 +644,6 @@ jobs:
           
           cd ..
           export PATH="$GCC_DIR:$PATH"
-          echo "🔧 Patching buildall.sh (split toolchains)"
-          sed -i 's/^make -j.*contrib$/echo "Using native toolchain for contrib"; PATH="\/usr\/bin:\/bin:\/usr\/sbin:\/sbin"; unset AS LD AR NM RANLIB STRIP; make -j1 contrib/' vlc/contrib/buildall.sh
-          
-          sed -i 's/^make -j.*$/echo "Switching to ARM toolchain for VLC"; export PATH="'"$GCC_DIR"':$PATH"; export AS="'"$GCC_DIR"'\/arm-linux-gnueabi-as"; export LD="'"$GCC_DIR"'\/arm-linux-gnueabi-ld"; export AR="'"$GCC_DIR"'\/arm-linux-gnueabi-ar"; export NM="'"$GCC_DIR"'\/arm-linux-gnueabi-nm"; make -j1/' vlc/contrib/buildall.sh
           
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
