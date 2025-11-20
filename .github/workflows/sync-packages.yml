@@ -287,7 +287,8 @@ jobs:
           fi
 
           echo "📌 Applying VLC patches..."
-          cd vlc
+          
+          cd vlc   # <-- You FORGOT this, that's why paths were wrong
           
           patch -p1 < ../../patches/patch-libass.patch
           patch -p1 < ../../patches/patch-freetype.patch
@@ -296,6 +297,7 @@ jobs:
           
           cd ..
           echo "✔ All patches applied"
+
           
           # ------------------------------------------------------
           # Pre-seed contrib tarballs
