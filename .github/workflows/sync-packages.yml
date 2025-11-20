@@ -643,16 +643,6 @@ jobs:
           unset AS LD AR NM RANLIB STRIP
           
           cd ..
-          
-          echo "🔧 Resetting environment for native contrib build"
-          export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
-          unset AS LD AR NM RANLIB STRIP CC CXX CPP CC_FOR_BUILD CXX_FOR_BUILD
-          
-          which as
-          as --version || true
-          which gcc
-          gcc --version || true
-          
           echo "🔧 Starting buildall.sh (native PATH in effect)"
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
