@@ -285,24 +285,26 @@ jobs:
               git checkout 4e0fa1b
               cd ..
           fi
+
           echo "📌 Applying VLC patches..."
           
-          # We are already inside: build/vlc-tizen
-          cd vlc   # this is the REAL VLC clone
+          cd vlc   # we are now inside /build/vlc-tizen/vlc
           
-          echo "📍 Current dir:"
-          pwd
-          echo "📁 Listing:"
+          echo "📍 Current dir: $(pwd)"
+          echo "📁 Files in this directory:"
           ls -al
           
-          # Apply patches
-          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-libass.patch"
-          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-freetype.patch"
-          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-buildvlc.patch"
-          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-clean-dibs.patch" || true
+          echo "📁 Checking contrib directory:"
+          ls -al contrib/src/ass || echo "ASS directory not found"
+          
+          # Apply patches using the correct strip level (-p2)
+          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-libass.patch"
+          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-freetype.patch"
+          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-buildvlc.patch"
+          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-clean-dibs.patch" || true
           
           cd ..
-          echo "✔ All patches applied successfully"
+          echo "✔ All patches applied correctly"
           
           # ------------------------------------------------------
           # Pre-seed contrib tarballs
