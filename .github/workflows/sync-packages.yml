@@ -256,6 +256,44 @@ jobs:
           # ------------------------------------------------------
           #               VLC-TIZEN BUILD PATH (CLEAN FIXED)
           # ------------------------------------------------------
+
+          ############################################################
+          # 🔧 PATCH buildvlc.sh TO USE NATIVE + ARM TOOLCHAINS PROPERLY
+          ############################################################
+          echo "🔧 Patching buildvlc.sh for split toolchain"
+          
+          BV="buildvlc.sh"
+          GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
+          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+          if [[ ! -f "$BV" ]]; then
+              echo "❌ ERROR: buildvlc.sh not found in $(pwd)"
+              ls -R .
+              exit 1
+          fi
+          
+          # 1. Before contrib build → force native compiler
+          sed -i '/cd \$CONTRIB_BUILD_DIR/i \
+          echo "🔧 Using NATIVE compiler for VLC contrib"; \
+          export PATH="\/usr\/bin:\/bin:\/usr\/sbin:\/sbin"; \
+          unset AS LD AR NM STRIP RANLIB CC CXX;' "$BV"
+          
+          # 2. Before VLC proper build → restore ARM cross compiler
+          sed -i '/CONFIGURE_FLAGS=/i \
+          echo "🔧 Switching to ARM cross-compiler for VLC core"; \
+          export PATH="'"$GCC_DIR"':$PATH"; \
+          export CC="'"$GCC_DIR"'\/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"; \
+          export CXX="'"$GCC_DIR"'\/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"; \
+          export AS="'"$GCC_DIR"'\/arm-linux-gnueabi-as"; \
+          export LD="'"$GCC_DIR"'\/arm-linux-gnueabi-ld"; \
+          export AR="'"$GCC_DIR"'\/arm-linux-gnueabi-ar"; \
+          export NM="'"$GCC_DIR"'\/arm-linux-gnueabi-nm"; \
+          export STRIP="'"$GCC_DIR"'\/arm-linux-gnueabi-strip";' "$BV"
+          
+          echo "✔ buildvlc.sh patched successfully"
+          ############################################################
+
+          
           echo "Building VLC-Tizen..."
           
           echo "Using Tizen SDK..."
@@ -383,10 +421,6 @@ jobs:
           # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
 
-          GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-
           echo "==== TOOLCHAIN BINARIES ===="
           ls -l "$GCC_DIR" || true
 
@@ -461,12 +495,6 @@ jobs:
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
           
-          which as
-          as --version || true
-          which ld
-          ld --version || true
-
-                    
           # -------------------------
           #  ADD THESE DEBUG LINES
           # -------------------------
@@ -616,6 +644,11 @@ jobs:
           
           cd ..
           export PATH="$GCC_DIR:$PATH"
+          echo "🔧 Patching buildall.sh (split toolchains)"
+          sed -i 's/^make -j.*contrib$/echo "Using native toolchain for contrib"; PATH="\/usr\/bin:\/bin:\/usr\/sbin:\/sbin"; unset AS LD AR NM RANLIB STRIP; make -j1 contrib/' vlc/contrib/buildall.sh
+          
+          sed -i 's/^make -j.*$/echo "Switching to ARM toolchain for VLC"; export PATH="'"$GCC_DIR"':$PATH"; export AS="'"$GCC_DIR"'\/arm-linux-gnueabi-as"; export LD="'"$GCC_DIR"'\/arm-linux-gnueabi-ld"; export AR="'"$GCC_DIR"'\/arm-linux-gnueabi-ar"; export NM="'"$GCC_DIR"'\/arm-linux-gnueabi-nm"; make -j1/' vlc/contrib/buildall.sh
+          
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
 
