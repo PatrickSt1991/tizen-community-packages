@@ -1,7 +1,7 @@
-diff --git a/vlc/contrib/src/main.mak b/vlc/contrib/src/main.mak
+diff --git a/contrib/src/main.mak b/contrib/src/main.mak
 index 666666..777777 100644
---- a/vlc/contrib/src/main.mak
-+++ b/vlc/contrib/src/main.mak
+--- a/contrib/src/main.mak
++++ b/contrib/src/main.mak
 @@ -20,6 +20,9 @@
  
  # Remove Samsung DIBS include pollution
