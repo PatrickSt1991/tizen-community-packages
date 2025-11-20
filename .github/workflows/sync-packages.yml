@@ -100,8 +100,7 @@ jobs:
           rm NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
 
           echo "✔ GCC 4.9 installed"
-
-
+          
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -256,44 +255,6 @@ jobs:
           # ------------------------------------------------------
           #               VLC-TIZEN BUILD PATH (CLEAN FIXED)
           # ------------------------------------------------------
-
-          ############################################################
-          # 🔧 PATCH buildvlc.sh TO USE NATIVE + ARM TOOLCHAINS PROPERLY
-          ############################################################
-          echo "🔧 Patching buildvlc.sh for split toolchain"
-          
-          BV="buildvlc.sh"
-          GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
-          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-          if [[ ! -f "$BV" ]]; then
-              echo "❌ ERROR: buildvlc.sh not found in $(pwd)"
-              ls -R .
-              exit 1
-          fi
-          
-          # 1. Before contrib build → force native compiler
-          sed -i '/cd \$CONTRIB_BUILD_DIR/i \
-          echo "🔧 Using NATIVE compiler for VLC contrib"; \
-          export PATH="\/usr\/bin:\/bin:\/usr\/sbin:\/sbin"; \
-          unset AS LD AR NM STRIP RANLIB CC CXX;' "$BV"
-          
-          # 2. Before VLC proper build → restore ARM cross compiler
-          sed -i '/CONFIGURE_FLAGS=/i \
-          echo "🔧 Switching to ARM cross-compiler for VLC core"; \
-          export PATH="'"$GCC_DIR"':$PATH"; \
-          export CC="'"$GCC_DIR"'\/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"; \
-          export CXX="'"$GCC_DIR"'\/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"; \
-          export AS="'"$GCC_DIR"'\/arm-linux-gnueabi-as"; \
-          export LD="'"$GCC_DIR"'\/arm-linux-gnueabi-ld"; \
-          export AR="'"$GCC_DIR"'\/arm-linux-gnueabi-ar"; \
-          export NM="'"$GCC_DIR"'\/arm-linux-gnueabi-nm"; \
-          export STRIP="'"$GCC_DIR"'\/arm-linux-gnueabi-strip";' "$BV"
-          
-          echo "✔ buildvlc.sh patched successfully"
-          ############################################################
-
-          
           echo "Building VLC-Tizen..."
           
           echo "Using Tizen SDK..."
@@ -311,11 +272,6 @@ jobs:
 
           export TIZEN_INCLUDES="$SYSROOT/usr/include"
           export TIZEN_LIBS="$SYSROOT/usr/lib"
-
-          
-          # Force correct SDK identifiers
-          printf '%s\n' "4.0" > "$TIZEN_SDK/sdk.version"
-          printf '%s\n' "4.0" > "$TIZEN_SDK/sdk.info"
           
           # Proper pkg-config sysroot
           export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
@@ -329,6 +285,16 @@ jobs:
               git checkout 4e0fa1b
               popd
           fi
+
+          echo "📌 Applying VLC patches..."
+          cd vlc
+          patch -p1 < ../patches/patch-libass.patch
+          patch -p1 < ../patches/patch-freetype.patch
+          patch -p1 < ../patches/patch-buildvlc.patch
+          patch -p1 < ../patches/patch-clean-dibs.patch || true
+          cd ..
+          echo "✔ All patches applied"
+
           
           # ------------------------------------------------------
           # Pre-seed contrib tarballs
@@ -422,6 +388,9 @@ jobs:
           # ------------------------------------------------------
 
           echo "==== TOOLCHAIN BINARIES ===="
+          GCC_DIR="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
+          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
           ls -l "$GCC_DIR" || true
 
           if [[ ! -f "$GCC_BIN" ]]; then
@@ -574,6 +543,24 @@ jobs:
           # ------------------------------------------------------
           # RUN CONTRIB BUILD
           # ------------------------------------------------------
+          echo "🔧 Forcing native toolchain for contrib build"
+          unset CC CXX LD AS AR NM RANLIB STRIP
+          export PATH="/usr/bin:/usr/sbin:/bin:/sbin"
+          
+          export CC_FOR_BUILD=gcc
+          export CXX_FOR_BUILD=g++
+          export CPP_FOR_BUILD=cpp
+          export LD_FOR_BUILD=ld
+          export AS_FOR_BUILD=as
+          export AR_FOR_BUILD=ar
+          export NM_FOR_BUILD=nm
+          export RANLIB_FOR_BUILD=ranlib
+          export STRIP_FOR_BUILD=strip
+          
+          echo "Using native toolchain for contrib:"
+          which gcc
+          gcc --version || true
+
           echo "🛡 Environment sanitized — starting contrib build"
           export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
 
@@ -624,25 +611,18 @@ jobs:
           
           echo "==== SUCCESS: cross compiler created test.out ===="
           ls -l test.out || true
-
-          echo "🔧 Restoring native toolchain for build-time tools"
-          unset AS LD AR NM RANLIB STRIP
+          echo "🔧 Re-enabling ARM toolchain for main VLC build"
           
-          export AS_FOR_BUILD=as
-          export LD_FOR_BUILD=ld
-          export AR_FOR_BUILD=ar
-          export NM_FOR_BUILD=nm
-          export RANLIB_FOR_BUILD=ranlib
-          export STRIP_FOR_BUILD=strip
+          export PATH="$GCC_DIR:$PATH"
+          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
 
-          # 🔧 FIX: Restore NATIVE PATH so freetype host tools work
-          ORIG_PATH="$PATH"
-          echo "🔧 Restoring native PATH (ensuring native as/ld are used)"
-          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$ORIG_PATH"
-          echo "🔧 Fixing AS overrides (must not force native AS for ARM code)"
-          unset AS LD AR NM RANLIB STRIP
-          
-          cd ..
           echo "🔧 Starting buildall.sh (native PATH in effect)"
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
