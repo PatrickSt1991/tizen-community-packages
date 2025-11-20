@@ -287,26 +287,14 @@ jobs:
           fi
 
           echo "📌 Applying VLC patches..."
-
-          echo "📍 Current working directory:"
-          pwd
           
-          echo "📁 Listing contents of current directory:"
-          ls -al
+          cd vlc   # enter VLC source root
           
-          echo "📁 Listing parent directory:"
-          ls -al ..
-          
-          echo "📁 Listing patches directory (if exists):"
-          ls -al "$GITHUB_WORKSPACE/patches" || echo "patches directory not found"
-
-          
-          cd vlc   # <-- You FORGOT this, that's why paths were wrong
-          
-          patch -p1 < ../../patches/patch-libass.patch
-          patch -p1 < ../../patches/patch-freetype.patch
-          patch -p1 < ../../patches/patch-buildvlc.patch
-          patch -p1 < ../../patches/patch-clean-dibs.patch || true
+          # ABSOLUTE paths — always correct
+          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-libass.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-freetype.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-buildvlc.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/patches/patch-clean-dibs.patch" || true
           
           cd ..
           echo "✔ All patches applied"
