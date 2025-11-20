@@ -285,20 +285,20 @@ jobs:
               git checkout 4e0fa1b
               cd ..
           fi
-
+          
           echo "📌 Applying VLC patches..."
           
-          cd vlc   # enter VLC source root
+          # cd into REAL VLC source (not parent wrapper)
+          cd vlc/vlc
           
-          # ABSOLUTE paths — always correct
+          # Apply patches (absolute paths prevent mistakes)
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-libass.patch"
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-freetype.patch"
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-buildvlc.patch"
           patch -p1 < "$GITHUB_WORKSPACE/patches/patch-clean-dibs.patch" || true
           
-          cd ..
-          echo "✔ All patches applied"
-
+          cd ../..
+          echo "✔ All patches applied correctly"
           
           # ------------------------------------------------------
           # Pre-seed contrib tarballs
