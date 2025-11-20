@@ -288,13 +288,14 @@ jobs:
 
           echo "📌 Applying VLC patches..."
           cd vlc
-          patch -p1 < ../patches/patch-libass.patch
-          patch -p1 < ../patches/patch-freetype.patch
-          patch -p1 < ../patches/patch-buildvlc.patch
-          patch -p1 < ../patches/patch-clean-dibs.patch || true
+          
+          patch -p1 < ../../patches/patch-libass.patch
+          patch -p1 < ../../patches/patch-freetype.patch
+          patch -p1 < ../../patches/patch-buildvlc.patch
+          patch -p1 < ../../patches/patch-clean-dibs.patch || true
+          
           cd ..
           echo "✔ All patches applied"
-
           
           # ------------------------------------------------------
           # Pre-seed contrib tarballs
