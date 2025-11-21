@@ -288,21 +288,21 @@ jobs:
 
           echo "📌 Applying VLC patches..."
           
-          cd vlc   # we are now inside /build/vlc-tizen/vlc
+          PATCH_DIR="$GITHUB_WORKSPACE/patches"
+          VLC_DIR="$PWD/vlc"   # current directory = build/vlc-tizen
           
-          echo "📍 Current dir: $(pwd)"
-          echo "📁 Files in this directory:"
-          ls -al
+          echo "PATCH_DIR = $PATCH_DIR"
+          ls -l "$PATCH_DIR"
           
-          echo "📁 Checking contrib directory:"
-          ls -al contrib/src/ass || echo "ASS directory not found"
+          echo "VLC_DIR = $VLC_DIR"
+          ls -l "$VLC_DIR/contrib/src/ass/" || true
           
-          # Apply patches using the correct strip level (-p2)
-          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-libass.patch"
-          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-freetype.patch"
-          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-buildvlc.patch"
-          patch -p2 < "$GITHUB_WORKSPACE/patches/patch-clean-dibs.patch" || true
-          
+          # Apply from VLC root using -d
+          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-libass.patch"
+          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-freetype.patch"
+          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-main-mak.patch"
+          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-buildvlc.patch"
+
           cd ..
           echo "✔ All patches applied correctly"
           
