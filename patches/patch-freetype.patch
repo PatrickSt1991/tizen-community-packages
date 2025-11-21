@@ -1,9 +1,5 @@
-diff --git a/contrib/src/freetype2/rules.mak b/contrib/src/freetype2/rules.mak
-index 2222222..3333333 100644
 --- a/contrib/src/freetype2/rules.mak
 +++ b/contrib/src/freetype2/rules.mak
-@@ -10,7 +10,7 @@ FREETYPE_CONF = \
-        --without-png \
-        --without-harfbuzz
+@@
 -CPPFLAGS += -I/usr/include
 +CFLAGS := $(filter-out -I/usr/include -I/usr/local/include,$(CFLAGS))
