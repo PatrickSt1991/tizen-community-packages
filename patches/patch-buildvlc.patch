@@ -1,7 +1,9 @@
 --- a/buildvlc.sh
 +++ b/buildvlc.sh
-@@
-+echo "🔧 Forcing native toolchain for contrib"
+@@ -45,6 +45,22 @@ echo "Preparing contrib..."
+
++# --------------- FORCE NATIVE TOOLCHAIN FOR CONTRIB BUILD ---------------
++echo "Forcing native toolchain for contrib"
 +unset CC CXX LD AS AR NM RANLIB STRIP
 +export CC_FOR_BUILD=gcc
 +export CXX_FOR_BUILD=g++
@@ -11,8 +13,13 @@
 +export NM_FOR_BUILD=nm
 +export RANLIB_FOR_BUILD=ranlib
 +export STRIP_FOR_BUILD=strip
-@@
-+echo "🔧 Switching to ARM cross-compiler for VLC core"
++
++# ------------------------------------------------------------------------
++
+@@ -140,6 +156,20 @@ CONFIGURE_FLAGS="$CONFIGURE_FLAGS --enable-some-option"
+
++# --------------- SWITCH TO ARM CROSS-TOOLCHAIN FOR VLC CORE ---------------
++echo "Switching to ARM cross-compiler for VLC core"
 +export PATH="$GCC_DIR:$PATH"
 +export CC="$GCC_DIR/arm-linux-gnueabi-gcc --sysroot=$SYSROOT"
 +export CXX="$GCC_DIR/arm-linux-gnueabi-g++ --sysroot=$SYSROOT"
@@ -22,3 +29,5 @@
 +export NM="$GCC_DIR/arm-linux-gnueabi-nm"
 +export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
 +export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
++
++# ---------------------------------------------------------------------------
