@@ -9,4 +9,3 @@ index 1111111..2222222 100644
 
 -FREETYPE_CFLAGS="
 +FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 "
-
