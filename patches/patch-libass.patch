@@ -1,9 +1,8 @@
 --- a/contrib/src/ass/rules.mak
 +++ b/contrib/src/ass/rules.mak
-@@ -1,7 +1,8 @@
-
+@@ -1 +1 @@
 -ASS_CFLAGS =
 +ASS_CFLAGS = -I$$(PREFIX)/include -I$$(PREFIX)/include/freetype2
-
+@@ -3 +3 @@
 -FREETYPE_CFLAGS="
 +FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 "

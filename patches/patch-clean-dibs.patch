@@ -1,8 +1,8 @@
 --- a/contrib/src/main.mak
 +++ b/contrib/src/main.mak
-@@ -20,6 +20,9 @@
-
- # Remove Samsung DIBS include pollution
+@@ -1,1 +1,4 @@
+-# Remove Samsung DIBS include pollution
++# Remove Samsung DIBS include pollution
 +CPPFLAGS := $(filter-out -I/root/.dibs%,$(CPPFLAGS))
 +CFLAGS := $(filter-out -I/root/.dibs%,$(CFLAGS))
 +CXXFLAGS := $(filter-out -I/root/.dibs%,$(CXXFLAGS))

@@ -1,7 +1,5 @@
 --- a/contrib/src/freetype2/rules.mak
 +++ b/contrib/src/freetype2/rules.mak
-@@ -10,7 +10,7 @@ FREETYPE_CONF = \
-        --without-png \
-        --without-harfbuzz
+@@ -1 +1 @@
 -CPPFLAGS += -I/usr/include
 +CFLAGS := $(filter-out -I/usr/include -I/usr/local/include,$(CFLAGS))
