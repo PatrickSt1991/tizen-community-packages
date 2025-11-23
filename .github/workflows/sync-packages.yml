@@ -222,11 +222,19 @@ jobs:
           echo "📌 cc1 permissions:"
           find tizen-studio -name cc1 -exec ls -l {} \;
 
-      - name: Install 32-bit compatibility libs (fix cross-toolchain execution)
+      - name: Install 32-bit compatibility libs for GCC 4.9 cc1
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y libc6:i386 libstdc++6:i386 zlib1g:i386 libgcc1:i386 libisl23 libmpfr6 libgmp10
+          sudo apt-get install -y \
+            libc6:i386 \
+            libstdc++6:i386 \
+            zlib1g:i386 \
+            libgcc1:i386 \
+            libisl23:i386 \
+            libmpfr6:i386 \
+            libgmp10:i386
+
 
       - name: Clone and build project
         shell: bash
@@ -421,6 +429,11 @@ jobs:
           
           echo "✔ cc1 placed where GCC REALLY searches:"
           ls -l "$EXPECTED_CC1_DIR"
+
+          chmod +x "$REAL_CC1_DIR/cc1"
+          chmod +x "$REAL_CC1_DIR/cc1plus"
+          chmod +x "$EXPECTED_CC1_DIR/cc1"
+          chmod +x "$EXPECTED_CC1_DIR/cc1plus"
 
           if [[ ! -f "$GCC_BIN" ]]; then
               echo "❌ GCC 4.9 compiler not found"
