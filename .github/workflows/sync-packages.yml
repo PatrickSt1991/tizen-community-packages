@@ -401,7 +401,7 @@ jobs:
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
           echo "GCC_DIR = $GCC_DIR"
           ls -l "$GCC_DIR"
-          export GCC_EXEC_PREFIX="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/"
+          export GCC_EXEC_PREFIX="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           echo "🔧 Creating GCC cc1 / cc1plus symlinks"
           mkdir -p "$GCC_EXEC_PREFIX/arm-linux-gnueabi/4.9.2"
 
