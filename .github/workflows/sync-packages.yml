@@ -397,12 +397,13 @@ jobs:
           echo "=== DEBUG: LIST TOOLCHAIN DIRS ==="
           find "$TIZEN_SDK/tools" -maxdepth 4 -type d | sort
 
-
           echo "==== TOOLCHAIN BINARIES ===="
-          GCC_DIR="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
+          echo "🔧 Setting correct toolchain path"
+          GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-          ls -l "$GCC_DIR" || true
+          echo "GCC_DIR = $GCC_DIR"
+          ls -l "$GCC_DIR"
 
           if [[ ! -f "$GCC_BIN" ]]; then
               echo "❌ GCC 4.9 compiler not found"
