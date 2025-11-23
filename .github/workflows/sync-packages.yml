@@ -604,10 +604,20 @@ jobs:
           sed -i 's|CPPFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
           sed -i 's|CXXFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
 
-          echo "==== GCC CROSS-COMPILER SELF-TEST ===="
+          # Restore ARM toolchain for cross-compiler test
+          echo "🔧 Restoring ARM cross-compiler for test"
+          
+          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          
           echo "CC = $CC"
-          echo "SYSROOT = $SYSROOT"
-          echo "GCC_DIR = $GCC_DIR"
+
           
           # Move into a safe directory
           cd vlc || true
