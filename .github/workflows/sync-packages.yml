@@ -230,11 +230,13 @@ jobs:
             libc6:i386 \
             libstdc++6:i386 \
             zlib1g:i386 \
+            libgcc-s1:i386 \
             libgcc1:i386 \
             libisl23:i386 \
             libmpfr6:i386 \
-            libgmp10:i386
-
+            libgmp10:i386 \
+            libmpc3:i386 \
+            libncurses5:i386            
 
       - name: Clone and build project
         shell: bash
@@ -673,7 +675,8 @@ jobs:
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
           
-          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT -B$GCC_DIR"
+          #export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT -B$GCC_DIR"
+          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
           
           echo 'int main(){return 0;}' > test.c
           
