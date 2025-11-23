@@ -286,24 +286,22 @@ jobs:
               cd ..
           fi
 
-          echo "📌 Applying VLC patches..."
+          echo "📌 Adjusting VLC sources (no external .patch files)"
           
-          PATCH_DIR="$GITHUB_WORKSPACE/patches"
           VLC_DIR="$PWD/vlc"   # current directory = build/vlc-tizen
-          
-          echo "PATCH_DIR = $PATCH_DIR"
-          ls -l "$PATCH_DIR"
-          
           echo "VLC_DIR = $VLC_DIR"
-          ls -l "$VLC_DIR/contrib/src/ass/" || true
           
-          # Apply from VLC root using -d
-          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-libass.patch"
-          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-main-mak.patch"
-          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-buildvlc.patch"
+          echo "🔧 Patching contrib/src/ass/rules.mak to add freetype includes"
+          sed -i '/^ASS_URL :=/a ASS_CFLAGS += -I\$\(PREFIX\)/include -I\$\(PREFIX\)/include/freetype2' \
+            "$VLC_DIR/contrib/src/ass/rules.mak"
+          
+          echo "🔧 Cleaning potential Samsung DIBS / global include pollution in contrib/src/main.mak (safe no-op if absent)"
+          sed -i 's|-I/root/.dibs[^ ]*||g' "$VLC_DIR/contrib/src/main.mak" || true
+          sed -i 's|-I/usr/include||g' "$VLC_DIR/contrib/src/main.mak" || true
+          sed -i 's|-I/usr/local/include||g' "$VLC_DIR/contrib/src/main.mak" || true
+          
+          echo "✔ VLC contrib sources adjusted"
 
-          cd ..
-          echo "✔ All patches applied correctly"
           
           # ------------------------------------------------------
           # Pre-seed contrib tarballs
