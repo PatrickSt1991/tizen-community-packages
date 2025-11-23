@@ -394,6 +394,10 @@ jobs:
           # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
 
+          echo "=== DEBUG: LIST TOOLCHAIN DIRS ==="
+          find "$TIZEN_SDK/tools" -maxdepth 4 -type d | sort
+
+
           echo "==== TOOLCHAIN BINARIES ===="
           GCC_DIR="$TIZEN_SDK/tools/arm-linux-gnueabi-gcc-4.9/bin"
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
