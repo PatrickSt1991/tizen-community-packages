@@ -408,16 +408,14 @@ jobs:
 
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           GCC_DIR="$GCC_ROOT/bin"
-          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
 
           echo "GCC_DIR = $GCC_DIR"
           ls -l "$GCC_DIR" || { echo "❌ GCC bin directory not found"; exit 1; }
 
-          # Put cross-compiler first in PATH; let GCC find its own cc1 under libexec/gcc/...
+          # Put cross-compiler first in PATH; GCC will find cc1 in libexec automatically
           export PATH="$GCC_DIR:$PATH"
 
-          # Cross compiler settings for VLC + contrib
+          # Environment variables for cross-compilation (used by VLC + contrib)
           export CC="$TARGET_TUPLE-gcc --sysroot=$SYSROOT"
           export CXX="$TARGET_TUPLE-g++ --sysroot=$SYSROOT"
           export CPP="$TARGET_TUPLE-cpp --sysroot=$SYSROOT"
@@ -426,30 +424,15 @@ jobs:
           export LD="$TARGET_TUPLE-ld"
           export STRIP="$TARGET_TUPLE-strip"
 
-          # Optional: just log where cc1 actually lives (no mkdir/chmod on fake paths)
+          # Only log the REAL cc1 directory - DO NOT touch it
           REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
+          echo "📌 Expected cc1 directory: $REAL_CC1_DIR"
+
           if [ -d "$REAL_CC1_DIR" ]; then
-            echo "📌 cc1 directory: $REAL_CC1_DIR"
+            echo "📂 Listing cc1 directory:"
             ls -l "$REAL_CC1_DIR" || true
           else
-            echo "⚠️ Warning: cc1 directory not found at $REAL_CC1_DIR (toolchain layout may differ)"
-          fi
-          
-
-          echo "DEBUG: Searching for cc1:"
-          find "$REAL_GCC_PREFIX" -name cc1 -maxdepth 6
-          
-          echo "✔ cc1 placed where GCC REALLY searches:"
-          ls -l "$EXPECTED_CC1_DIR"
-
-          chmod +x "$REAL_CC1_DIR/cc1"
-          chmod +x "$REAL_CC1_DIR/cc1plus"
-          chmod +x "$EXPECTED_CC1_DIR/cc1"
-          chmod +x "$EXPECTED_CC1_DIR/cc1plus"
-
-          if [[ ! -f "$GCC_BIN" ]]; then
-              echo "❌ GCC 4.9 compiler not found"
-              exit 1
+            echo "⚠️ WARNING: cc1 directory not found – toolchain may be incomplete"
           fi
 
           echo "✔ Using GCC directory: $GCC_DIR"
