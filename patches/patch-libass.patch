@@ -1,8 +1,23 @@
+diff --git a/contrib/src/ass/rules.mak b/contrib/src/ass/rules.mak
+index 0000000..1111111 100644
 --- a/contrib/src/ass/rules.mak
 +++ b/contrib/src/ass/rules.mak
-@@ -1 +1 @@
--ASS_CFLAGS =
-+ASS_CFLAGS = -I$$(PREFIX)/include -I$$(PREFIX)/include/freetype2
-@@ -3 +3 @@
--FREETYPE_CFLAGS="
-+FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 "
+@@ -56,17 +56,18 @@ ifneq ($(WITH_HARFBUZZ), 0)
+ DEPS_ass += harfbuzz $(DEPS_harfbuzz)
+ else
+ ASS_CONF += --disable-harfbuzz
+ endif
+ 
+ ifdef WITH_OPTIMIZATION
+ ASS_CFLAGS += -O3
+ else
+ ASS_CFLAGS += -g
+ endif
+ 
++ASS_CFLAGS += -I$(PREFIX)/include -I$(PREFIX)/include/freetype2
++
+ .ass: libass
+ 	$(RECONF)
+ 	cd $< && $(HOSTVARS) CFLAGS="$(CFLAGS) $(ASS_CFLAGS)" ./configure $(HOSTCONF) $(ASS_CONF)
+ 	cd $< && $(MAKE) install
+ 	touch $@
