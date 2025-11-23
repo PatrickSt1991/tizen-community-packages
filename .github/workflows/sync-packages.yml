@@ -411,16 +411,20 @@ jobs:
               find "$GCC_EXEC_PREFIX" -name cc1 -maxdepth 5
               exit 1
           fi
-          
-          ln -sf \
-            "$GCC_EXEC_PREFIX/libexec/gcc/arm-linux-gnueabi/4.9.2/cc1" \
-            "$GCC_EXEC_PREFIX/arm-linux-gnueabi/4.9.2/cc1"
-          
-          ln -sf \
-            "$GCC_EXEC_PREFIX/libexec/gcc/arm-linux-gnueabi/4.9.2/cc1plus" \
-            "$GCC_EXEC_PREFIX/arm-linux-gnueabi/4.9.2/cc1plus"
 
-
+          # Mirror the directory tree GCC expects:
+          EXPECTED_CC1_DIR="$GCC_EXEC_PREFIX/arm-linux-gnueabi/4.9.2"
+          mkdir -p "$EXPECTED_CC1_DIR"
+          
+          # Link cc1 and cc1plus
+          ln -sf "$GCC_EXEC_PREFIX/libexec/gcc/arm-linux-gnueabi/4.9.2/cc1" \
+                "$EXPECTED_CC1_DIR/cc1"
+          
+          ln -sf "$GCC_EXEC_PREFIX/libexec/gcc/arm-linux-gnueabi/4.9.2/cc1plus" \
+                "$EXPECTED_CC1_DIR/cc1plus"
+          
+          echo "Created cc1 symlinks at: $EXPECTED_CC1_DIR"
+          ls -l "$EXPECTED_CC1_DIR"
 
           if [[ ! -f "$GCC_BIN" ]]; then
               echo "❌ GCC 4.9 compiler not found"
