@@ -226,7 +226,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y libc6:i386 libstdc++6:i386 zlib1g:i386 libgcc1:i386
+          sudo apt-get install -y libc6:i386 libstdc++6:i386 zlib1g:i386 libgcc1:i386 libisl23 libmpfr6 libgmp10
 
       - name: Clone and build project
         shell: bash
