@@ -421,8 +421,20 @@ jobs:
           
           mkdir -p "$EXPECTED_CC1_DIR"
           
-          ln -sf "$REAL_CC1_DIR/cc1" "$EXPECTED_CC1_DIR/cc1"
-          ln -sf "$REAL_CC1_DIR/cc1plus" "$EXPECTED_CC1_DIR/cc1plus"
+          # USE THE ARM BACKEND cc1 (CORRECT)
+          ARM_CC1_DIR="$REAL_GCC_PREFIX/arm-linux-gnueabi/4.9.2"
+          
+          # Ensure ARM cc1 exists
+          ls -l "$ARM_CC1_DIR" || true
+          
+          # Fix symlinks (ARM → ARM)
+          ln -sf "$ARM_CC1_DIR/cc1" "$ARM_CC1_DIR/../../bin/cc1"
+          ln -sf "$ARM_CC1_DIR/cc1plus" "$ARM_CC1_DIR/../../bin/cc1plus"
+          
+          # Make sure they’re executable
+          chmod +x "$ARM_CC1_DIR/cc1"
+          chmod +x "$ARM_CC1_DIR/cc1plus"
+          
 
           echo "DEBUG: Searching for cc1:"
           find "$REAL_GCC_PREFIX" -name cc1 -maxdepth 6
