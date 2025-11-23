@@ -299,7 +299,6 @@ jobs:
           
           # Apply from VLC root using -d
           patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-libass.patch"
-          patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-freetype.patch"
           patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-main-mak.patch"
           patch -p1 -d "$VLC_DIR" < "$PATCH_DIR/patch-buildvlc.patch"
 
