@@ -403,21 +403,23 @@ jobs:
           ls -l "$GCC_DIR"
           export GCC_EXEC_PREFIX="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/"
           
-          echo "🔧 Creating real GCC cc1 / cc1plus symlinks (correct directories)"
+          echo "🔧 Fixing cc1 location based on GCC -v iprefix output"
           
-          # The real compiler directory that GCC searches FIRST
           REAL_GCC_PREFIX="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           REAL_CC1_DIR="$REAL_GCC_PREFIX/libexec/gcc/arm-linux-gnueabi/4.9.2"
           
-          # GCC expects cc1 HERE:
-          EXPECTED_CC1_DIR="$REAL_GCC_PREFIX/lib/gcc/arm-linux-gnueabi/4.9.2"
+          # This directory is the one GCC ACTUALLY USES (from -v dump)
+          EXPECTED_CC1_DIR="$REAL_GCC_PREFIX/arm-linux-gnueabi/4.9.2"
           
           mkdir -p "$EXPECTED_CC1_DIR"
           
           ln -sf "$REAL_CC1_DIR/cc1" "$EXPECTED_CC1_DIR/cc1"
           ln -sf "$REAL_CC1_DIR/cc1plus" "$EXPECTED_CC1_DIR/cc1plus"
+
+          echo "DEBUG: Searching for cc1:"
+          find "$REAL_GCC_PREFIX" -name cc1 -maxdepth 6
           
-          echo "✔ cc1 / cc1plus fixed"
+          echo "✔ cc1 placed where GCC REALLY searches:"
           ls -l "$EXPECTED_CC1_DIR"
 
           if [[ ! -f "$GCC_BIN" ]]; then
