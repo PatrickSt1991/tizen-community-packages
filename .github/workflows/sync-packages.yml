@@ -401,6 +401,8 @@ jobs:
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
           echo "GCC_DIR = $GCC_DIR"
           ls -l "$GCC_DIR"
+          export GCC_EXEC_PREFIX="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/"
+
 
           if [[ ! -f "$GCC_BIN" ]]; then
               echo "❌ GCC 4.9 compiler not found"
@@ -554,7 +556,7 @@ jobs:
           # ------------------------------------------------------
           echo "🔧 Forcing native toolchain for contrib build"
           unset CC CXX LD AS AR NM RANLIB STRIP
-          export PATH="/usr/bin:/usr/sbin:/bin:/sbin"
+          export PATH="$GCC_DIR:$PATH"
           
           export CC_FOR_BUILD=gcc
           export CXX_FOR_BUILD=g++
@@ -628,7 +630,6 @@ jobs:
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
           
-          export GCC_EXEC_PREFIX="$GCC_DIR/"
           export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT -B$GCC_DIR"
           
           echo 'int main(){return 0;}' > test.c
