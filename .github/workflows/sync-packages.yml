@@ -235,8 +235,7 @@ jobs:
             libisl23:i386 \
             libmpfr6:i386 \
             libgmp10:i386 \
-            libmpc3:i386 \
-            libncurses5:i386            
+            libmpc3:i386
 
       - name: Clone and build project
         shell: bash
