@@ -394,9 +394,6 @@ jobs:
           # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
 
-          echo "=== DEBUG: LIST TOOLCHAIN DIRS ==="
-          find "$TIZEN_SDK/tools" -maxdepth 4 -type d | sort
-
           echo "==== TOOLCHAIN BINARIES ===="
           echo "🔧 Setting correct toolchain path"
           GCC_DIR="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9/bin"
@@ -621,6 +618,18 @@ jobs:
           
           # Move into a safe directory
           cd vlc || true
+
+          echo "🔧 Forcing ARM binutils for GCC"
+          export PATH="$GCC_DIR:$PATH"
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          
+          export GCC_EXEC_PREFIX="$GCC_DIR/"
+          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT -B$GCC_DIR"
           
           echo 'int main(){return 0;}' > test.c
           
