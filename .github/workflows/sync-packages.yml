@@ -682,6 +682,11 @@ jobs:
           sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
           sed -i 's|/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
           sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/src/main.mak || true
+          
+          echo "💥 Unsetting global C_*_PATH variables to prevent DIBS path pollution."
+          unset C_INCLUDE_PATH || true
+          unset CPLUS_INCLUDE_PATH || true
+          unset CPATH || true
 
           # Final variable cleanup (safety repeat)
           export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
