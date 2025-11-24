@@ -685,12 +685,9 @@ jobs:
           
           echo "💥 FIX: Setting CC_FOR_BUILD to bypass DIBS path pollution."
 
-          CC_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH gcc"
-          export CC_FOR_BUILD
-          
-          CXX_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH g++"
-          export CXX_FOR_BUILD
-          
+          eval "export CC_FOR_BUILD='/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH gcc'"
+          eval "export CXX_FOR_BUILD='/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH g++'"
+
           # Clear the corresponding flag variables for the native compiler (safety)
           export CFLAGS_FOR_BUILD=""
           export CPPFLAGS_FOR_BUILD=""
