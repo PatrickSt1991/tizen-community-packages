@@ -556,9 +556,21 @@ jobs:
 
           cd vlc || true
           
-          echo "🔧 Re-asserting ARM binutils PATH override"
+          echo "🔧 FINAL OVERRIDE — forcing ARM cross binutils"
           export PATH="$GCC_DIR:$PATH"
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          
+          # VERY IMPORTANT
           hash -r
+          
+          echo "🔎 PATH = $PATH"
+          echo "🔎 which as: $(which as)"
+          echo "🔎 which ld: $(which ld)"
           
           echo 'int main(){return 0;}' > test.c
           
