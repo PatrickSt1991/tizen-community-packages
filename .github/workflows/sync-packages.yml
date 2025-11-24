@@ -613,6 +613,7 @@ jobs:
           
           echo "==== SUCCESS: cross compiler created test.out ===="
           ls -l test.out || true
+          cd ..
           echo "🔧 Re-enabling ARM toolchain for main VLC build"
           
           export PATH="$GCC_DIR:$PATH"
