@@ -648,7 +648,13 @@ jobs:
           export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          
+          unset CFLAGS || true
+          unset CPPFLAGS || true
+          unset CXXFLAGS || true
 
+          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+          
           echo "🔧 Enforcing real ARM toolchain for CC/CXX"
           export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
           export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
