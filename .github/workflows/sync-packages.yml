@@ -587,8 +587,10 @@ jobs:
           
           REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
           
-          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
-          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
+          #export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
+          #export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
+          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
+          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
 
           echo "🔧 FINAL OVERRIDE — forcing ARM cross binutils"
           export PATH="$GCC_DIR:$PATH"
