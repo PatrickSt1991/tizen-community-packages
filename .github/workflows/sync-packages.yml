@@ -632,9 +632,14 @@ jobs:
           sed -i "5i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib"     vlc/contrib/src/main.mak
           sed -i "6i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip"       vlc/contrib/src/main.mak
           sed -i "7i PATH := ${GCC_DIR}:\$(PATH)\n"                     vlc/contrib/src/main.mak
+          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
+          sed -i 's|/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
+          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/src/main.mak || true
           
-          echo "🔧 Starting buildall.sh (ARM binutils forced via main.mak)"
-
+          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          
           echo "🔧 Starting buildall.sh (ARM binutils forced via main.mak)"
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
