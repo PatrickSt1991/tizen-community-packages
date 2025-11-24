@@ -554,12 +554,14 @@ jobs:
           sed -i 's|CPPFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
           sed -i 's|CXXFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
 
-          
-          # Move into a safe directory
           cd vlc || true
-                    
+          
+          echo "🔧 Re-asserting ARM binutils PATH override"
+          export PATH="$GCC_DIR:$PATH"
+          hash -r
+          
           echo 'int main(){return 0;}' > test.c
-
+          
           echo "🔧 Enforcing real ARM toolchain for GCC"
           
           REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
