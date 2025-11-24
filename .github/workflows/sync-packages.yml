@@ -376,6 +376,7 @@ jobs:
             ["LibVNCServer-0.9.9.tar.gz"]="https://download.videolan.org/testing/contrib/vncclient/LibVNCServer-0.9.9.tar.gz"
             ["zlib-1.2.8.tar.gz"]="https://download.videolan.org/pub/contrib/zlib/zlib-1.2.8.tar.gz"
             ["zvbi-0.2.35.tar.bz2"]="https://download.videolan.org/contrib/zvbi/zvbi-0.2.35.tar.bz2"
+            ["libarchive-3.1.2.tar.gz"]="https://download.videolan.org/contrib/libarchive/libarchive-3.1.2.tar.gz"
           )
           
           for F in "${!PKG_URLS[@]}"; do
@@ -642,6 +643,30 @@ jobs:
           export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
 
+          sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
+          echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
+          # Function to aggressively clean an environment variable
+          cleanup_env() {
+              local var_name=$1
+              local clean_value
+              # Remove all -I/root/.dibs... strings, then remove empty spaces
+              clean_value=$(echo "${!var_name}" | sed 's|-I/root/\.dibs[^ ]*||g' | xargs)
+              export "$var_name"="$clean_value"
+              echo "  $var_name cleaned."
+          }
+
+          for f in vlc/contrib/config.mak vlc/contrib/src/main.mak; do
+            if [[ -f "$f" ]]; then
+              sed -i 's|-I/root/\.dibs[^ ]*||g' "$f" || true
+              echo "  Cleaned $f."
+            fi
+          done
+
+          cleanup_env CFLAGS
+          cleanup_env CPPFLAGS
+          cleanup_env CXXFLAGS
+
+          echo "🔧 PATCH: Ensuring zlib internal test is skipped."
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
           
