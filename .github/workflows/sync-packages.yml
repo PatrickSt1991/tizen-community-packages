@@ -408,6 +408,10 @@ jobs:
 
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           GCC_DIR="$GCC_ROOT/bin"
+          
+          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
+          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+          export GCC_BIN GCC_PLUS_BIN
 
           echo "GCC_DIR = $GCC_DIR"
           ls -l "$GCC_DIR" || { echo "❌ GCC bin directory not found"; exit 1; }
@@ -460,46 +464,9 @@ jobs:
           export RANLIB_FOR_BUILD=ranlib
           export STRIP_FOR_BUILD=strip
           
-          # ------------------------------------------------------
-          # IMPORTANT: specs-clean DOES NOT WORK for this GCC
-          # GCC only honors TARGET.specs located in the same dir
-          # ------------------------------------------------------
-
-          echo "🔗 Forcing cross binutils via symlinks"
-          ln -sf "$GCC_DIR/arm-linux-gnueabi-as" "$GCC_DIR/as"
-          ln -sf "$GCC_DIR/arm-linux-gnueabi-ld" "$GCC_DIR/ld"
-          REAL_SPECS="$GCC_DIR/arm-linux-gnueabi.specs"
-
-          echo "🧹 Rebuilding clean GCC specs at: $REAL_SPECS"
-
-          "$GCC_BIN" -dumpspecs \
-              | sed '/\.dibs/d' \
-              | sed '/srib-dibs-builder/d' \
-              > "$REAL_SPECS"
-
-          echo "🔧 Patching specs to use SYSROOT dynamic linker"
-          
-          # Replace hardcoded /lib/ld-linux.so.3 with SYSROOT version
-          sed -i "s|/lib/ld-linux.so.3|$SYSROOT/lib/ld-linux.so.3|g" "$REAL_SPECS"
-          sed -i "s|/lib/ld-linux-armhf.so.3|$SYSROOT/lib/ld-linux-armhf.so.3|g" "$REAL_SPECS"
-          
-          # Replace hardcoded libc paths
-          sed -i "s|/lib/libc.so.6|$SYSROOT/lib/libc.so.6|g" "$REAL_SPECS"
-          sed -i "s|/usr/lib/libc_nonshared.a|$SYSROOT/usr/lib/libc_nonshared.a|g" "$REAL_SPECS"
-          
-          echo "==== Patched specs (link section) ===="
-          grep -R "ld-linux" -n "$REAL_SPECS" || true
-          echo "======================================"
-
-
-          echo "==== DUMPING arm-linux-gnueabi.specs ===="
-          cat "$REAL_SPECS"
-          echo "=========================================="
-
           # Export patched compiler wrappers
-          
-          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
-          export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export CC="$GCC_BIN --sysroot=$SYSROOT"
+          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT"
           
           # -------------------------
           #  ADD THESE DEBUG LINES
@@ -525,36 +492,6 @@ jobs:
           echo "Searching for Tizen libc:"
           find $SYSROOT -name "libc.so*" -maxdepth 4 || true
           find $SYSROOT -name "ld-linux*.so*" -maxdepth 4 || true
-          # -------------------------
-
-          echo "🔧 Patching libc linker script for absolute paths"
-          LIBC_SCRIPT="$SYSROOT/usr/lib/libc.so"
-          
-          if [[ -f "$LIBC_SCRIPT" ]]; then
-            echo "  → Found libc script at: $LIBC_SCRIPT"
-            echo "    (before patch) first lines:"
-            head -n 10 "$LIBC_SCRIPT" || true
-          
-            # Rewrite absolute paths inside the linker script to point into the SYSROOT
-            sed -i "s|/lib/libc.so.6|$SYSROOT/lib/libc.so.6|g" "$LIBC_SCRIPT"
-            sed -i "s|/usr/lib/libc_nonshared.a|$SYSROOT/usr/lib/libc_nonshared.a|g" "$LIBC_SCRIPT"
-            sed -i "s|/lib/ld-linux.so.3|$SYSROOT/lib/ld-linux.so.3|g" "$LIBC_SCRIPT"
-          
-            echo "    (after patch) lines mentioning libc/ld-linux:"
-            grep -n "libc.so.6" "$LIBC_SCRIPT" || true
-            grep -n "libc_nonshared.a" "$LIBC_SCRIPT" || true
-            grep -n "ld-linux.so.3" "$LIBC_SCRIPT" || true
-          else
-            echo "⚠️ libc script not found at $LIBC_SCRIPT (layout different than expected)"
-          fi
-          
-          #echo "🔧 Updating PATH to use ARM binutils first"
-          #export PATH="$GCC_DIR:$PATH"
-
-          echo "🔎 Active GCC specs:"
-          $CC -v 2>&1 | grep specs || true
-
-          
           # ------------------------------------------------------
           # Disable AC_RUN_IFELSE and AC_TRY_RUN for cross compile
           # ------------------------------------------------------
@@ -632,8 +569,8 @@ jobs:
           # Restore ARM toolchain for cross-compiler test
           echo "🔧 Restoring ARM cross-compiler for test"
           
-          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
-          export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export CC="$GCC_BIN --sysroot=$SYSROOT"
+          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT"
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
           export AR="$GCC_DIR/arm-linux-gnueabi-ar"
@@ -655,10 +592,7 @@ jobs:
           export NM="$GCC_DIR/arm-linux-gnueabi-nm"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-          
-          #export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT -B$GCC_DIR"
-          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
-          
+                    
           echo 'int main(){return 0;}' > test.c
           
           echo "==== Running: $CC test.c -o test.out -v ===="
@@ -673,8 +607,8 @@ jobs:
           echo "🔧 Re-enabling ARM toolchain for main VLC build"
           
           export PATH="$GCC_DIR:$PATH"
-          export CC="$GCC_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
-          export CXX="$GCC_PLUS_BIN -specs=$REAL_SPECS --sysroot=$SYSROOT"
+          export CC="$GCC_BIN --sysroot=$SYSROOT"
+          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT"
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
           export AR="$GCC_DIR/arm-linux-gnueabi-ar"
