@@ -192,8 +192,6 @@ jobs:
           path: .
 
       - name: Install VLC prerequisites
-        # CRITICAL: These dependencies are needed for VLC's contrib build.
-        # It is safe to run this for all builds as they are general build tools.
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -205,9 +203,8 @@ jobs:
       # ----------------------------------------------
       # 🧩 CACHE: VLC contrib & extras/tools
       # ----------------------------------------------
-      # CRITICAL FIX: Only attempt to restore VLC cache for VLC builds
       - name: Restore VLC contrib cache
-        if: ${{ matrix.repo == 'Samsung/vlc-tizen' }}
+        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }} # ⬅️ CORRECTED REPO
         id: vlc-contrib-cache
         uses: actions/cache@v4
         with:
@@ -498,7 +495,7 @@ jobs:
       # STEP 2/3: AGGRESSIVE CLEANUP AND GCC WRAPPER (CONDITIONAL)
       # ----------------------------------------------------------------------------------
       - name: Aggressive DIBS Path Remediation (GCC Wrapper)
-        if: ${{ matrix.repo == 'Samsung/vlc-tizen' }} # ⬅️ Only runs for VLC
+        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }} # ⬅️ CORRECTED REPO
         shell: bash
         env:
           TIZEN_SDK: ${{ github.workspace }}/tizen-studio
@@ -619,7 +616,7 @@ jobs:
       # STEP 3/3: FINAL CROSS-COMPILE TEST, BUILD, AND PACKAGE (CONDITIONAL)
       # ----------------------------------------------------------------------------------
       - name: Cross-Compile Test and Run Build
-        if: ${{ matrix.repo == 'Samsung/vlc-tizen' }} # ⬅️ Only runs for VLC
+        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }} # ⬅️ CORRECTED REPO
         shell: bash
         env:
           TIZEN_SDK: ${{ github.workspace }}/tizen-studio
@@ -673,7 +670,7 @@ jobs:
           
           echo "==== SUCCESS: cross compiler created test.out ===="
           ls -l test.out || true
-          cd ..
+          cd সমাজের
           
           # Final patches before running buildall.sh
           echo "🔧 Forcing ARM binutils inside contrib main.mak"
