@@ -611,7 +611,18 @@ jobs:
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
 
-          echo "🔧 Starting buildall.sh (native PATH in effect)"
+          echo "🔧 Forcing ARM binutils inside contrib main.mak"
+          sed -i "1i AS := ${GCC_DIR}/arm-linux-gnueabi-as"             vlc/contrib/src/main.mak
+          sed -i "2i LD := ${GCC_DIR}/arm-linux-gnueabi-ld"             vlc/contrib/src/main.mak
+          sed -i "3i AR := ${GCC_DIR}/arm-linux-gnueabi-ar"             vlc/contrib/src/main.mak
+          sed -i "4i NM := ${GCC_DIR}/arm-linux-gnueabi-nm"             vlc/contrib/src/main.mak
+          sed -i "5i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib"     vlc/contrib/src/main.mak
+          sed -i "6i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip"       vlc/contrib/src/main.mak
+          sed -i "7i PATH := ${GCC_DIR}:\$(PATH)\n"                     vlc/contrib/src/main.mak
+          
+          echo "🔧 Starting buildall.sh (ARM binutils forced via main.mak)"
+
+          echo "🔧 Starting buildall.sh (ARM binutils forced via main.mak)"
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
 
