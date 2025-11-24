@@ -610,7 +610,7 @@ jobs:
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
           
-          echo "🛡 Environment fully sanitized. Continuing to final build step."
+          echo "Environment fully sanitized. Continuing to final build step."
 
       - name: Cross-Compile Test and Run Build
         if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }}
@@ -629,13 +629,13 @@ jobs:
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
           TARGET_TUPLE=arm-linux-gnueabi
-          
+
           GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
-          
+
           # Re-establish PATH with wrapper (must be first) and ARM toolchain
           export PATH="$GCC_WRAPPER_DIR:$GCC_DIR:$PATH"
           hash -r
-          
+
           # Re-establish ARM toolchain variables
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
@@ -643,32 +643,30 @@ jobs:
           export NM="$GCC_DIR/arm-linux-gnueabi-nm"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-          
+
           # Safety cleanup of environment variables
           export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
 
           echo "🔧 Enforcing real ARM toolchain for CC/CXX"
-          # This sets the cross-compiler for the main VLC configure phase
           export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
           export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
 
           # Final Cross-Compile Test
-          cd vlc || true # Go into vlc subdirectory
+          cd vlc || true
           echo 'int main(){return 0;}' > test.c
-          
+
           echo "==== Running: $CC test.c -o test.out -v ===="
           $CC test.c -o test.out -v || {
             echo "❌ CROSS-COMPILER FAILED — THIS IS WHY configure SAYS 'cannot create executables'"
-            echo "Stopping early so we can read the compiler output."
             exit 1
           }
-          
+
           echo "==== SUCCESS: cross compiler created test.out ===="
           ls -l test.out || true
-          cd .. # 🔥 FIXED: Changed 'cd সমাজের' to 'cd ..'
-          
+          cd ..
+
           # Final patches before running buildall.sh
           echo "🔧 Forcing ARM binutils inside contrib main.mak"
           sed -i "1i AS := ${GCC_DIR}/arm-linux-gnueabi-as"             vlc/contrib/src/main.mak
@@ -678,40 +676,31 @@ jobs:
           sed -i "5i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib"     vlc/contrib/src/main.mak
           sed -i "6i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip"       vlc/contrib/src/main.mak
           sed -i "7i PATH := ${GCC_DIR}:\$(PATH)\n"                     vlc/contrib/src/main.mak
-          
+
           sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
-          sed -i 's|/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
+          sed -i 's|/root/\.dibs[^ ]*||g'   vlc/contrib/config.mak || true
           sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/src/main.mak || true
-          
-          echo "💥 FIX: Setting CC_FOR_BUILD to bypass DIBS path pollution."
 
-          eval "export CC_FOR_BUILD='/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH gcc'"
-          eval "export CXX_FOR_BUILD='/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH g++'"
+          echo "💥 FIX: Setting CC_FOR_BUILD to bypass DIBS path pollution."
+          export CC_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH gcc"
+          export CXX_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH g++"
+          export CFLAGS_FOR_BUILD=""
+          export CPPFLAGS_FOR_BUILD=""
+          export LDFLAGS_FOR_BUILD=""
 
-          # Clear the corresponding flag variables for the native compiler (safety)
-          export CFLAGS_FOR_BUILD=""
-          export CPPFLAGS_FOR_BUILD=""
-          export LDFLAGS_FOR_BUILD=""
+          echo "💥 Unsetting global C_*_PATH variables to prevent DIBS path pollution."
+          unset C_INCLUDE_PATH || true
+          unset CPLUS_INCLUDE_PATH || true
+          unset CPATH || true
 
-          # Safety cleanup: Unsetting variables globally just in case they are used elsewhere.
-          echo "💥 Unsetting global C_*_PATH variables to prevent DIBS path pollution."
-          unset C_INCLUDE_PATH || true
-          unset CPLUS_INCLUDE_PATH || true
-          unset CPATH || true
-
-          # Final variable cleanup (safety repeat)
-          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-
-          # Final variable cleanup (safety repeat)
+          # Final variable cleanup
           export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
 
           echo "🔧 Starting buildall.sh"
           export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
-          
+
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
 
@@ -743,7 +732,7 @@ jobs:
               fi
 
               echo "🔁 Re-running make in failing module with full debug"
-              make -C "$FAILED_MODULE" V=1 --debug=b || true 
+              make -C "$FAILED_MODULE" V=1 --debug=b || true
 
               echo "❌ Stopping build."
               exit 1
