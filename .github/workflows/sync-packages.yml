@@ -645,16 +645,27 @@ jobs:
 
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
+
           # Function to aggressively clean an environment variable
           cleanup_env() {
               local var_name=$1
               local clean_value
               # Remove all -I/root/.dibs... strings, then remove empty spaces
-              clean_value=$(echo "${!var_name}" | sed 's|-I/root/\.dibs[^ ]*||g' | xargs)
-              export "$var_name"="$clean_value"
+              clean_value=$(echo "${!var_name}" | sed 's|-I/root/\.dibs[^ ]*||g')
+              # Use xargs to trim leading/trailing whitespace and normalize spaces
+              export "$var_name"="$(echo "$clean_value" | xargs)"
               echo "  $var_name cleaned."
           }
 
+          cleanup_env CFLAGS
+          cleanup_env CPPFLAGS
+          cleanup_env CXXFLAGS
+          
+          export BUILD_CFLAGS=""
+          export BUILD_CPPFLAGS=""
+          export BUILD_LDFLAGS=""
+          echo "  BUILD_* variables cleared for native checks."
+          
           for f in vlc/contrib/config.mak vlc/contrib/src/main.mak; do
             if [[ -f "$f" ]]; then
               sed -i 's|-I/root/\.dibs[^ ]*||g' "$f" || true
@@ -662,14 +673,11 @@ jobs:
             fi
           done
 
-          cleanup_env CFLAGS
-          cleanup_env CPPFLAGS
-          cleanup_env CXXFLAGS
-
+          # 4. Apply Zlib internal test patch again (for robustness)
           echo "🔧 PATCH: Ensuring zlib internal test is skipped."
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
-          
+
           echo "🔧 Starting buildall.sh (ARM binutils forced via main.mak)"
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
