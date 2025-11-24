@@ -641,7 +641,8 @@ jobs:
 
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
-# ----------------------------------------------
+          
+          # ----------------------------------------------
           # 🔥 CRITICAL FIX: AGGRESSIVE ENVIRONMENT CLEANUP (YAML-Safe Version)
           # This block ensures the native (host) compiler is 100% clean by
           # implementing a wrapper that strips toxic paths from arguments.
