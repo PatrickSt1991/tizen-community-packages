@@ -419,15 +419,6 @@ jobs:
           # Put cross-compiler first in PATH; GCC will find cc1 in libexec automatically
           export PATH="$GCC_DIR:$PATH"
 
-          # Environment variables for cross-compilation (used by VLC + contrib)
-          export CC="$TARGET_TUPLE-gcc --sysroot=$SYSROOT"
-          export CXX="$TARGET_TUPLE-g++ --sysroot=$SYSROOT"
-          export CPP="$TARGET_TUPLE-cpp --sysroot=$SYSROOT"
-          export AR="$TARGET_TUPLE-ar"
-          export RANLIB="$TARGET_TUPLE-ranlib"
-          export LD="$TARGET_TUPLE-ld"
-          export STRIP="$TARGET_TUPLE-strip"
-
           # Only log the REAL cc1 directory - DO NOT touch it
           REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
           echo "📌 Expected cc1 directory: $REAL_CC1_DIR"
@@ -464,9 +455,6 @@ jobs:
           export RANLIB_FOR_BUILD=ranlib
           export STRIP_FOR_BUILD=strip
           
-          # Export patched compiler wrappers
-          export CC="$GCC_BIN --sysroot=$SYSROOT"
-          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT"
           
           # -------------------------
           #  ADD THESE DEBUG LINES
@@ -566,34 +554,32 @@ jobs:
           sed -i 's|CPPFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
           sed -i 's|CXXFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
 
-          # Restore ARM toolchain for cross-compiler test
-          echo "🔧 Restoring ARM cross-compiler for test"
-          
-          export CC="$GCC_BIN --sysroot=$SYSROOT"
-          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT"
-          export AS="$GCC_DIR/arm-linux-gnueabi-as"
-          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
-          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-          
-          echo "CC = $CC"
-
           
           # Move into a safe directory
           cd vlc || true
+                    
+          echo 'int main(){return 0;}' > test.c
 
-          echo "🔧 Forcing ARM binutils for GCC"
-          export PATH="$GCC_DIR:$PATH"
+          echo "🔧 Enforcing real ARM toolchain for GCC"
+          
+          REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
+          export GCC_EXEC_PREFIX="$GCC_ROOT/"
+          
+          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
+          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
+          
+          # Correct binutils for ARM
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
           export AR="$GCC_DIR/arm-linux-gnueabi-ar"
           export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-                    
-          echo 'int main(){return 0;}' > test.c
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          
+          echo "🔎 Using CC = $CC"
+          echo "🔎 which as: $(which as)"
+          echo "🔎 which ld: $(which ld)"
+
           
           echo "==== Running: $CC test.c -o test.out -v ===="
           $CC test.c -o test.out -v || {
@@ -607,8 +593,6 @@ jobs:
           echo "🔧 Re-enabling ARM toolchain for main VLC build"
           
           export PATH="$GCC_DIR:$PATH"
-          export CC="$GCC_BIN --sysroot=$SYSROOT"
-          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT"
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
           export AR="$GCC_DIR/arm-linux-gnueabi-ar"
