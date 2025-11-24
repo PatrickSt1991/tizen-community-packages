@@ -612,11 +612,8 @@ jobs:
           
           echo "🛡 Environment fully sanitized. Continuing to final build step."
 
-      # ----------------------------------------------------------------------------------
-      # STEP 3/3: FINAL CROSS-COMPILE TEST, BUILD, AND PACKAGE (CONDITIONAL)
-      # ----------------------------------------------------------------------------------
       - name: Cross-Compile Test and Run Build
-        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }} # ⬅️ CORRECTED REPO
+        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }}
         shell: bash
         env:
           TIZEN_SDK: ${{ github.workspace }}/tizen-studio
@@ -651,16 +648,16 @@ jobs:
           export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          
-          # Final Cross-Compile Test
-          cd vlc || true
-          echo 'int main(){return 0;}' > test.c
-          
+
           echo "🔧 Enforcing real ARM toolchain for CC/CXX"
           # This sets the cross-compiler for the main VLC configure phase
           export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
           export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
 
+          # Final Cross-Compile Test
+          cd vlc || true # Go into vlc subdirectory
+          echo 'int main(){return 0;}' > test.c
+          
           echo "==== Running: $CC test.c -o test.out -v ===="
           $CC test.c -o test.out -v || {
             echo "❌ CROSS-COMPILER FAILED — THIS IS WHY configure SAYS 'cannot create executables'"
@@ -670,7 +667,7 @@ jobs:
           
           echo "==== SUCCESS: cross compiler created test.out ===="
           ls -l test.out || true
-          cd সমাজের
+          cd .. # 🔥 FIXED: Changed 'cd সমাজের' to 'cd ..'
           
           # Final patches before running buildall.sh
           echo "🔧 Forcing ARM binutils inside contrib main.mak"
