@@ -646,39 +646,58 @@ jobs:
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
 
-          # Function to aggressively clean an environment variable
+          # ... (Your existing YAML setup) ...
+          
+          # ----------------------------------------------
+          # 🔧 FIX: AGGRESSIVE ENVIRONMENT CLEANUP
+          # ----------------------------------------------
+          echo "🔧 EMERGENCY CLEANUP: Removing ALL '/root/.dibs' paths and aggressively cleaning environment."
+
+          # Function to aggressively clean standard variables (TARGET)
           cleanup_env() {
               local var_name=$1
               local clean_value
-              # Remove all -I/root/.dibs... strings, then remove empty spaces
-              clean_value=$(echo "${!var_name}" | sed 's|-I/root/\.dibs[^ ]*||g')
+              # Remove all -I/root/.dibs... or -L/root/.dibs... strings
+              clean_value=$(echo "${!var_name}" | sed 's|[-I-L]/root/\.dibs[^ ]*||g')
               # Use xargs to trim leading/trailing whitespace and normalize spaces
               export "$var_name"="$(echo "$clean_value" | xargs)"
               echo "  $var_name cleaned."
           }
 
+          # 1. Clean environment variables for the TARGET (ARM)
           cleanup_env CFLAGS
           cleanup_env CPPFLAGS
           cleanup_env CXXFLAGS
+          cleanup_env LDFLAGS
+
+          # 2. Clear the NATIVE/BUILD-specific flags used by Autoconf's host checks.
+          export CC_FOR_BUILD="gcc"
+          export CFLAGS_FOR_BUILD=""
+          export CPPFLAGS_FOR_BUILD=""
+          export LDFLAGS_FOR_BUILD=""
+          echo "  BUILD_* variables explicitly set to clean state."
+
+          # 3. 🔥 CRITICAL PATCH: Modify freetype2/rules.mak to force clean flags
+          # This overrides the environment variables for the configure command itself,
+          # preventing the native compiler check from inheriting toxic paths.
+          echo "🔧 PATCH: Injecting CFLAGS=\"\" into freetype2/rules.mak configure call."
+          sed -i 's/cd \$(BUILDDIR)\/freetype/CFLAGS="" CPPFLAGS="" LDFLAGS="" cd \$(BUILDDIR)\/freetype/' vlc/contrib/src/freetype2/rules.mak
           
-          export BUILD_CFLAGS=""
-          export BUILD_CPPFLAGS=""
-          export BUILD_LDFLAGS=""
-          echo "  BUILD_* variables cleared for native checks."
-          
+          # 4. Clean the global contrib configuration files (Safe repeat)
           for f in vlc/contrib/config.mak vlc/contrib/src/main.mak; do
             if [[ -f "$f" ]]; then
-              sed -i 's|-I/root/\.dibs[^ ]*||g' "$f" || true
+              sed -i 's|[-I-L]/root/\.dibs[^ ]*||g' "$f" || true
               echo "  Cleaned $f."
             fi
           done
 
-          # 4. Apply Zlib internal test patch again (for robustness)
+          # 5. Apply Zlib internal test patch again (for robustness)
           echo "🔧 PATCH: Ensuring zlib internal test is skipped."
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
-
-          echo "🔧 Starting buildall.sh (ARM binutils forced via main.mak)"
+          
+          echo "🔧 Starting buildall.sh"
+          
           ./buildall.sh -a armv7l || {
               echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
 
