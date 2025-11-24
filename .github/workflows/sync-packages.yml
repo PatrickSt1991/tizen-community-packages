@@ -169,7 +169,7 @@ jobs:
             }]}' repos-build.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
-tizen-build:
+  tizen-build:
     runs-on: ubuntu-latest
     needs: [prepare, generate-matrix-build]
 
