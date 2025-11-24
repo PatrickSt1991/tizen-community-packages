@@ -641,22 +641,22 @@ jobs:
 
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
-
-          # ----------------------------------------------
-          # 🔥 CRITICAL FIX: AGGRESSIVE ENVIRONMENT CLEANUP
-          # The '/root/.dibs' paths are leaking via hidden include path variables.
-          # We must unset them AND clean CFLAGS/config files to be safe.
+# ----------------------------------------------
+          # 🔥 CRITICAL FIX: AGGRESSIVE ENVIRONMENT CLEANUP (YAML-Safe Version)
+          # This block ensures the native (host) compiler is 100% clean by
+          # implementing a wrapper that strips toxic paths from arguments.
           # ----------------------------------------------
           echo "🔧 EMERGENCY CLEANUP: Performing scorched-earth cleanup for DIBS paths."
 
-          # --- Step 1: Unset hidden global include path variables ---
-          # These are often the true source of 'Permission Denied' errors in cross-builds.
+          # 1. Unset all known variables (Belt & Suspenders)
           unset C_INCLUDE_PATH || true
           unset CPLUS_INCLUDE_PATH || true
           unset CPATH || true
-          echo "  Global C_*_PATH variables unset."
+          unset LIBRARY_PATH || true
+          echo "  Global path variables unset."
 
-          # --- Step 2: Aggressively clean standard variables (TARGET) ---
+          # 2. Aggressively clean standard flags (using the function defined below)
+          # Function to aggressively clean standard variables (TARGET)
           cleanup_env() {
               local var_name=$1
               local clean_value
@@ -671,30 +671,77 @@ jobs:
           cleanup_env CPPFLAGS
           cleanup_env CXXFLAGS
           cleanup_env LDFLAGS
-
-          # --- Step 3: Explicitly define clean NATIVE/BUILD flags ---
-          # This forces the internal 'gcc' check to run without any flags.
+          
+          # 3. Clear the NATIVE/BUILD-specific flags
           export CC_FOR_BUILD="gcc"
           export CFLAGS_FOR_BUILD=""
           export CPPFLAGS_FOR_BUILD=""
           export LDFLAGS_FOR_BUILD=""
           echo "  BUILD_* variables explicitly set to clean state."
 
-          # --- Step 4: Patch Freetype configure invocation ---
-          # This is the last line of defense, ensuring local flags are empty.
+          # 4. Patch freetype2/rules.mak (The in-source patch)
           echo "🔧 PATCH: Injecting CFLAGS=\"\" into freetype2/rules.mak configure call."
           sed -i 's/cd \$(BUILDDIR)\/freetype/CFLAGS="" CPPFLAGS="" LDFLAGS="" cd \$(BUILDDIR)\/freetype/' vlc/contrib/src/freetype2/rules.mak
 
-          # --- Step 5: Clean global config files (Safe repeat) ---
+          # 5. 🔥 FINAL FILTER: Create a GCC/G++ wrapper (using YAML-safe echo commands)
+          echo "🔧 WRAPPER: Creating clean gcc/g++ wrapper to filter DIBS paths."
+
+          # Create a temporary, high-priority directory
+          GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
+          mkdir -p "$GCC_WRAPPER_DIR"
+          
+          # Inject it into PATH (before /usr/bin) and refresh hash
+          export PATH="$GCC_WRAPPER_DIR:$PATH"
+          hash -r
+
+          # Find the actual system GCC binary (usually /usr/bin/gcc)
+          REAL_GCC=$(which -a gcc | grep -v "$GCC_WRAPPER_DIR" | head -n 1)
+          if [[ -z "$REAL_GCC" ]]; then 
+              REAL_GCC="/usr/bin/gcc"
+              echo "⚠️ Could not find system gcc, assuming $REAL_GCC"
+          fi
+          
+          # --- Create GCC wrapper script ---
+          echo "Creating gcc wrapper..."
+          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/gcc"
+          echo '# Wrapper script to filter out toxic DIBS paths.' >> "$GCC_WRAPPER_DIR/gcc"
+          # Inject the REAL_GCC path from the outer shell into the script
+          echo "REAL_BIN=\"$REAL_GCC\"" >> "$GCC_WRAPPER_DIR/gcc" 
+          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '    if [[ "$arg" != *"/root/.dibs/"* ]]; then' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '        CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '    fi' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'done' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/gcc"
+          chmod +x "$GCC_WRAPPER_DIR/gcc"
+          
+          # --- Create G++ wrapper script ---
+          echo "Creating g++ wrapper..."
+          REAL_GPP=$(echo "$REAL_GCC" | sed 's/gcc$/g++/g')
+          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/g++"
+          echo '# Wrapper script to filter out toxic DIBS paths.' >> "$GCC_WRAPPER_DIR/g++"
+          echo "REAL_BIN=\"$REAL_GPP\"" >> "$GCC_WRAPPER_DIR/g++" 
+          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/g++"
+          echo '    if [[ "$arg" != *"/root/.dibs/"* ]]; then' >> "$GCC_WRAPPER_DIR/g++"
+          echo '        CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/g++"
+          echo '    fi' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'done' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/g++"
+          chmod +x "$GCC_WRAPPER_DIR/g++"
+
+          echo "✅ GCC/G++ wrapper created in $GCC_WRAPPER_DIR. All native compiler calls are now filtered."
+
+          # 6. Clean the global config files (Safe repeat)
           for f in vlc/contrib/config.mak vlc/contrib/src/main.mak; do
             if [[ -f "$f" ]]; then
-              # Remove both -I and -L paths
               sed -i 's|[-I-L]/root/\.dibs[^ ]*||g' "$f" || true
               echo "  Cleaned $f."
             fi
           done
 
-          # --- Step 6: Apply Zlib internal test patch again (for robustness) ---
+          # 7. Apply Zlib internal test patch again (for robustness)
           echo "🔧 PATCH: Ensuring zlib internal test is skipped."
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
