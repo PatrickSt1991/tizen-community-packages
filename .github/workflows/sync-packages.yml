@@ -506,9 +506,22 @@ jobs:
           # RUN CONTRIB BUILD
           # ------------------------------------------------------
           echo "🔧 Forcing native toolchain for contrib build"
-          unset CC CXX LD AS AR NM RANLIB STRIP
-          export PATH="$GCC_DIR:$PATH"
           
+          # Only unset compiler – DO NOT touch assembler/linker!
+          unset CC CXX
+          
+          # Keep ARM binutils active
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          
+          # Keep ARM toolchain first in PATH
+          export PATH="$GCC_DIR:$PATH"
+          hash -r
+
           export CC_FOR_BUILD=gcc
           export CXX_FOR_BUILD=g++
           export CPP_FOR_BUILD=cpp
@@ -555,7 +568,16 @@ jobs:
           sed -i 's|CXXFLAGS += -I/usr/local/include||g' vlc/contrib/src/main.mak
 
           cd vlc || true
+                    
+          echo 'int main(){return 0;}' > test.c
           
+          echo "🔧 Enforcing real ARM toolchain for GCC"
+          
+          REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
+          
+          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
+          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
+
           echo "🔧 FINAL OVERRIDE — forcing ARM cross binutils"
           export PATH="$GCC_DIR:$PATH"
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
@@ -565,34 +587,10 @@ jobs:
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           
-          # VERY IMPORTANT
           hash -r
           
-          echo "🔎 PATH = $PATH"
-          echo "🔎 which as: $(which as)"
-          echo "🔎 which ld: $(which ld)"
-          
-          echo 'int main(){return 0;}' > test.c
-          
-          echo "🔧 Enforcing real ARM toolchain for GCC"
-          
-          REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
-          
-          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
-          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR -B$REAL_CC1_DIR/"
-          
-          # Correct binutils for ARM
-          export AS="$GCC_DIR/arm-linux-gnueabi-as"
-          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
-          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-          
-          echo "🔎 Using CC = $CC"
-          echo "🔎 which as: $(which as)"
-          echo "🔎 which ld: $(which ld)"
-
+          echo "🔎 FINAL which as: $(which as)"
+          echo "🔎 FINAL which ld: $(which ld)"
           
           echo "==== Running: $CC test.c -o test.out -v ===="
           $CC test.c -o test.out -v || {
