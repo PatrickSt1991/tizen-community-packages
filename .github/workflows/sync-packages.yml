@@ -510,11 +510,7 @@ jobs:
           
           export ACLOCAL_PATH="$PWD/vlc/contrib/m4:$PWD/vlc/extras/tools/m4"
           export AUTOM4TE_SUBDIRS="$PWD/vlc/contrib/m4"
-          
-          # Clean environment (BUT KEEP pkg-config!!)
-          unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
-          unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH
-          
+                    
           # ------------------------------------------------------
           # RUN CONTRIB BUILD
           # ------------------------------------------------------
@@ -646,14 +642,21 @@ jobs:
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
 
-          # ... (Your existing YAML setup) ...
-          
           # ----------------------------------------------
-          # 🔧 FIX: AGGRESSIVE ENVIRONMENT CLEANUP
+          # 🔥 CRITICAL FIX: AGGRESSIVE ENVIRONMENT CLEANUP
+          # The '/root/.dibs' paths are leaking via hidden include path variables.
+          # We must unset them AND clean CFLAGS/config files to be safe.
           # ----------------------------------------------
-          echo "🔧 EMERGENCY CLEANUP: Removing ALL '/root/.dibs' paths and aggressively cleaning environment."
+          echo "🔧 EMERGENCY CLEANUP: Performing scorched-earth cleanup for DIBS paths."
 
-          # Function to aggressively clean standard variables (TARGET)
+          # --- Step 1: Unset hidden global include path variables ---
+          # These are often the true source of 'Permission Denied' errors in cross-builds.
+          unset C_INCLUDE_PATH || true
+          unset CPLUS_INCLUDE_PATH || true
+          unset CPATH || true
+          echo "  Global C_*_PATH variables unset."
+
+          # --- Step 2: Aggressively clean standard variables (TARGET) ---
           cleanup_env() {
               local var_name=$1
               local clean_value
@@ -664,34 +667,34 @@ jobs:
               echo "  $var_name cleaned."
           }
 
-          # 1. Clean environment variables for the TARGET (ARM)
           cleanup_env CFLAGS
           cleanup_env CPPFLAGS
           cleanup_env CXXFLAGS
           cleanup_env LDFLAGS
 
-          # 2. Clear the NATIVE/BUILD-specific flags used by Autoconf's host checks.
+          # --- Step 3: Explicitly define clean NATIVE/BUILD flags ---
+          # This forces the internal 'gcc' check to run without any flags.
           export CC_FOR_BUILD="gcc"
           export CFLAGS_FOR_BUILD=""
           export CPPFLAGS_FOR_BUILD=""
           export LDFLAGS_FOR_BUILD=""
           echo "  BUILD_* variables explicitly set to clean state."
 
-          # 3. 🔥 CRITICAL PATCH: Modify freetype2/rules.mak to force clean flags
-          # This overrides the environment variables for the configure command itself,
-          # preventing the native compiler check from inheriting toxic paths.
+          # --- Step 4: Patch Freetype configure invocation ---
+          # This is the last line of defense, ensuring local flags are empty.
           echo "🔧 PATCH: Injecting CFLAGS=\"\" into freetype2/rules.mak configure call."
           sed -i 's/cd \$(BUILDDIR)\/freetype/CFLAGS="" CPPFLAGS="" LDFLAGS="" cd \$(BUILDDIR)\/freetype/' vlc/contrib/src/freetype2/rules.mak
-          
-          # 4. Clean the global contrib configuration files (Safe repeat)
+
+          # --- Step 5: Clean global config files (Safe repeat) ---
           for f in vlc/contrib/config.mak vlc/contrib/src/main.mak; do
             if [[ -f "$f" ]]; then
+              # Remove both -I and -L paths
               sed -i 's|[-I-L]/root/\.dibs[^ ]*||g' "$f" || true
               echo "  Cleaned $f."
             fi
           done
 
-          # 5. Apply Zlib internal test patch again (for robustness)
+          # --- Step 6: Apply Zlib internal test patch again (for robustness) ---
           echo "🔧 PATCH: Ensuring zlib internal test is skipped."
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
           echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
