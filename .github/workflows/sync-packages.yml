@@ -192,6 +192,8 @@ jobs:
           path: .
 
       - name: Install VLC prerequisites
+        # CRITICAL: These dependencies are needed for VLC's contrib build.
+        # It is safe to run this for all builds as they are general build tools.
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -203,7 +205,9 @@ jobs:
       # ----------------------------------------------
       # 🧩 CACHE: VLC contrib & extras/tools
       # ----------------------------------------------
+      # CRITICAL FIX: Only attempt to restore VLC cache for VLC builds
       - name: Restore VLC contrib cache
+        if: ${{ matrix.repo == 'Samsung/vlc-tizen' }}
         id: vlc-contrib-cache
         uses: actions/cache@v4
         with:
@@ -237,7 +241,10 @@ jobs:
             libgmp10:i386 \
             libmpc3:i386
 
-      - name: Clone Project and Initial Setup
+      # ----------------------------------------------------------------------
+      # STEP 1/3: Clone Project, Handle Standard Build Exit, Basic VLC Setup
+      # ----------------------------------------------------------------------
+      - name: Clone Project & Initial Setup (VLC or Standard)
         shell: bash
         env:
           TIZEN_SDK: ${{ github.workspace }}/tizen-studio
@@ -253,16 +260,18 @@ jobs:
           cd "$(basename "${{ matrix.repo }}")"
           repo_name="$(basename "${{ matrix.repo }}")"
 
+          # If NOT VLC-Tizen, run standard build and exit this step successfully.
           if [[ "$repo_name" != "vlc-tizen" ]]; then
             echo "Building standard web project..."
             "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
             "$TIZEN_PATH/tools/ide/bin/tizen" package \
               -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
+            echo "Non-VLC repo finished. Subsequent VLC steps will be skipped by conditional logic."
             exit 0
           fi
 
           # ------------------------------------------------------
-          #               VLC-TIZEN BUILD PATH (INITIAL SETUP)
+          #               VLC-TIZEN INITIAL SETUP (VLC Only)
           # ------------------------------------------------------
           echo "Building VLC-Tizen..."
           
@@ -313,7 +322,7 @@ jobs:
 
           
           # ------------------------------------------------------
-          # Pre-seed contrib tarballs & libass/freetype patch
+          # Pre-seed contrib tarballs
           # ------------------------------------------------------
           CONTRIB_DIR="vlc/contrib/tarballs"
           mkdir -p "$CONTRIB_DIR"
@@ -327,9 +336,55 @@ jobs:
           declare -A PKG_URLS=(
             ["a52dec-0.7.4.tar.gz"]="https://downloads.videolan.org/pub/contrib/a52dec-0.7.4.tar.gz"
             ["libass-0.13.0.tar.gz"]="https://downloads.videolan.org/testing/contrib/ass/libass-0.13.0.tar.gz"
-            # ... (All your tarball download definitions go here) ...
             ["libdvbpsi-1.3.0.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvbpsi/1.3.0/libdvbpsi-1.3.0.tar.bz2"
-            # ... (truncated for brevity, ensure all your previous URLs are here) ...
+            ["libdvdcss-1.3.99.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdcss/1.3.99/libdvdcss-1.3.99.tar.bz2"
+            ["libdvdnav-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdnav/5.0.3/libdvdnav-5.0.3.tar.bz2"
+            ["libdvdread-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdread/5.0.3/libdvdread-5.0.3.tar.bz2"
+            ["libebml-1.3.3.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/ebml/libebml-1.3.3.tar.bz2"
+            ["libmatroska-1.4.4.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/matroska/libmatroska-1.4.4.tar.bz2"
+            ["libmad-0.15.1b.tar.gz"]="https://downloads.videolan.org/pub/contrib/libmad-0.15.1b.tar.gz"
+            ["libmpeg2-0.5.1.tar.gz"]="https://download.videolan.org/contrib/libmpeg2/libmpeg2-0.5.1.tar.gz"
+            ["flac-1.3.1.tar.xz"]="https://download.videolan.org/contrib/flac/flac-1.3.1.tar.xz"
+            ["freetype-2.6.1.tar.gz"]="https://download.videolan.org/contrib/freetype2/freetype-2.6.1.tar.gz"
+            ["fribidi-0.19.7.tar.bz2"]="https://download.videolan.org/contrib/fribidi/fribidi-0.19.7.tar.bz2"
+            ["harfbuzz-1.0.6.tar.bz2"]="https://download.videolan.org/pub/contrib/harfbuzz/harfbuzz-1.0.6.tar.bz2"
+            ["gnutls-3.2.21.tar.xz"]="https://downloads.videolan.org/pub/pub/contrib/gnutls/gnutls-3.2.21.tar.xz"
+            ["libtasn1-3.7.tar.gz"]="https://download.videolan.org/pub/pub/contrib/libtasn1/libtasn1-3.7.tar.gz"
+            ["libgcrypt-1.6.2.tar.bz2"]="https://download.videolan.org/contrib/gcrypt/libgcrypt-1.6.2.tar.bz2"
+            ["libgpg-error-1.18.tar.bz2"]="https://download.videolan.org/pub/contrib/gpg-error/libgpg-error-1.18.tar.bz2"
+            ["gmp-6.0.0.tar.bz2"]="https://download.videolan.org/contrib/gmp/gmp-6.0.0.tar.bz2"
+            ["libiconv-1.14.tar.gz"]="https://download.videolan.org/contrib/iconv/libiconv-1.14.tar.gz"
+            ["libxml2-2.9.2.tar.gz"]="https://download.videolan.org/pub/contrib/libxml2/libxml2-2.9.2.tar.gz"
+            ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
+            ["live.2015.06.24.tar.gz"]="https://downloads.videolan.org/pub/contrib/live555/live.2015.06.24.tar.gz"
+            ["ffmpeg-HEAD.tar.xz"]="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
+            ["libmodplug-0.8.8.5.tar.gz"]="https://download.videolan.org/contrib/modplug/libmodplug-0.8.8.5.tar.gz"
+            ["nettle-2.7.1.tar.gz"]="https://download.videolan.org/contrib/nettle/nettle-2.7.1.tar.gz"
+            ["openjpeg-1.5.0.tar.gz"]="https://download.videolan.org/contrib/openjpeg/openjpeg-1.5.0.tar.gz"
+            ["libcddb-1.3.2.tar.bz2"]="https://download.videolan.org/testing/contrib/cddb/libcddb-1.3.2.tar.bz2"
+            ["chromaprint-1.0.tar.gz"]="https://download.videolan.org/contrib/chromaprint-1.0.tar.gz"
+            ["faad2-2.7.tar.gz"]="https://download.videolan.org/contrib/faad2/faad2-2.7.tar.gz"
+            ["libffi-3.0.13.tar.gz"]="https://download.videolan.org/testing/contrib/ffi/libffi-3.0.13.tar.gz"
+            ["fluidsynth-1.1.6.tar.bz2"]="https://download.videolan.org/contrib/fluid/fluidsynth-1.1.6.tar.bz2"
+            ["glew-1.7.0.tar.gz"]="https://download.videolan.org/testing/contrib/glew/glew-1.7.0.tar.gz"
+            ["glib-2.38.tar.xz"]="https://download.gnome.org/sources/glib/2.38/glib-2.38.0.tar.xz"
+            ["game-music-emu-0.6.0.tar.bz2"]="https://download.videolan.org/pub/contrib/gme/game-music-emu-0.6.0.tar.bz2"
+            ["growl-1.2.2.tar.bz2"]="https://download.videolan.org/testing/contrib/growl/growl-1.2.2.tar.bz2"
+            ["libkate-0.4.1.tar.gz"]="https://download.videolan.org/pub/pub/contrib/kate/libkate-0.4.1.tar.gz"
+            ["lame-3.99.5.tar.gz"]="https://download.videolan.org/pub/contrib/lame/lame-3.99.5.tar.gz"
+            ["mpg123-1.21.0.tar.bz2"]="https://download.videolan.org/contrib/mpg123/mpg123-1.21.0.tar.bz2"
+            ["libpng-1.6.19.tar.xz"]="https://download.videolan.org/pub/contrib/png/libpng-1.6.19.tar.xz"
+            ["projectM-2.0.1-Source.tar.gz"]="https://download.videolan.org/contrib/projectM/projectM-2.0.1-Source.tar.gz"
+            ["pthreads-w32-2-9-1-release.tar.gz"]="https://download.videolan.org/pub/contrib/pthreads/pthreads-w32-2-9-1-release.tar.gz"
+            ["sidplay-libs-2.1.1.tar.gz"]="https://download.videolan.org/pub/contrib/sidplay2/sidplay-libs-2.1.1.tar.gz"
+            ["soxr-0.1.2-Source.tar.xz"]="https://download.videolan.org/pub/contrib/soxr-0.1.2-Source.tar.xz"
+            ["tiff-4.0.3.tar.gz"]="https://download.videolan.org/contrib/tiff/tiff-4.0.3.tar.gz"
+            ["libtiger-0.3.1.tar.gz"]="https://download.videolan.org/pub/contrib/tiger/libtiger-0.3.1.tar.gz"
+            ["twolame-0.3.13.tar.gz"]="https://download.videolan.org/contrib/twolame/twolame-0.3.13.tar.gz"
+            ["libupnp-1.6.19.tar.bz2"]="https://download.videolan.org/contrib/upnp/libupnp-1.6.19.tar.bz2"
+            ["LibVNCServer-0.9.9.tar.gz"]="https://download.videolan.org/testing/contrib/vncclient/LibVNCServer-0.9.9.tar.gz"
+            ["zlib-1.2.8.tar.gz"]="https://download.videolan.org/pub/contrib/zlib/zlib-1.2.8.tar.gz"
+            ["zvbi-0.2.35.tar.bz2"]="https://download.videolan.org/contrib/zvbi/zvbi-0.2.35.tar.bz2"
             ["libarchive-3.1.2.tar.gz"]="https://download.videolan.org/contrib/libarchive/libarchive-3.1.2.tar.gz"
           )
           
@@ -340,22 +395,31 @@ jobs:
           echo "🧹 Removing previous contrib build (avoids poisoned includes)"
           rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
           
+          # ------------------------------------------------------
+          # libass / freetype include patch — CORRECT FIX
+          # ------------------------------------------------------
           echo "🔧 Patching libass freetype paths"
+
           sed -i \
               's|ASS_CFLAGS =|ASS_CFLAGS = -I$$(PREFIX)/include -I$$(PREFIX)/include/freetype2 |' \
               vlc/contrib/src/ass/rules.mak
+          
+          # Ensure freetype flags include correct root
           sed -i \
               's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 |' \
               vlc/contrib/src/ass/rules.mak
 
           # ------------------------------------------------------
-          # CORRECT GCC 4.9 CROSS-COMPILER SETUP (PARTIAL)
+          # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
           # ------------------------------------------------------
+
           echo "==== TOOLCHAIN BINARIES ===="
+          echo "🔧 Setting correct toolchain path"
+
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           GCC_DIR="$GCC_ROOT/bin"
-          echo "🔧 Setting correct toolchain path"
-          
+
+          echo "🔧 Creating toolchain symlinks to prevent x86 fallback"
           cd "$GCC_DIR"
           ln -sf arm-linux-gnueabi-as as
           ln -sf arm-linux-gnueabi-ld ld
@@ -367,11 +431,30 @@ jobs:
           ln -sf arm-linux-gnueabi-gcc gcc
           cd -
           
-          export GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          export GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
+          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+          export GCC_BIN GCC_PLUS_BIN
 
-          # Put cross-compiler first in PATH
+          echo "GCC_DIR = $GCC_DIR"
+
+          # Put cross-compiler first in PATH; GCC will find cc1 in libexec automatically
           export PATH="$GCC_DIR:$PATH"
+
+          # Only log the REAL cc1 directory - DO NOT touch it
+          TARGET_TUPLE=arm-linux-gnueabi
+          REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
+          echo "📌 Expected cc1 directory: $REAL_CC1_DIR"
+
+          if [ -d "$REAL_CC1_DIR" ]; then
+            echo "📂 Listing cc1 directory:"
+            ls -l "$REAL_CC1_DIR" || true
+          else
+            echo "⚠️ WARNING: cc1 directory not found – toolchain may be incomplete"
+          fi
+
+          echo "✔ Using GCC directory: $GCC_DIR"
+          export PATH="$GCC_DIR:$PATH"
+          echo "🔧 PATH updated to prefer ARM toolchain"
           
           # ARM cross binutils
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
@@ -380,7 +463,19 @@ jobs:
           export NM="$GCC_DIR/arm-linux-gnueabi-nm"
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-
+          
+          
+          export CC_FOR_BUILD=gcc
+          export CXX_FOR_BUILD=g++
+          export CPP_FOR_BUILD=cpp
+          export LD_FOR_BUILD=ld
+          export AS_FOR_BUILD=as
+          export AR_FOR_BUILD=ar
+          export NM_FOR_BUILD=nm
+          export RANLIB_FOR_BUILD=ranlib
+          export STRIP_FOR_BUILD=strip
+          
+          
           # Disable AC_RUN_IFELSE and AC_TRY_RUN for cross compile
           mkdir -p vlc/contrib/m4
           cat << 'EOF' > vlc/contrib/m4/disable-run.m4
@@ -393,15 +488,17 @@ jobs:
             ifelse([$3], , :, [$3])
           ])
           EOF
+          
           export ACLOCAL_PATH="$PWD/vlc/contrib/m4:$PWD/vlc/extras/tools/m4"
           export AUTOM4TE_SUBDIRS="$PWD/vlc/contrib/m4"
-                    
-          echo "🛡 Continuing to aggressive cleanup step."
+          
+          echo "🛡 VLC initial environment established. Continuing to cleanup steps."
 
       # ----------------------------------------------------------------------------------
-      # STEP 2: AGGRESSIVE CLEANUP AND GCC WRAPPER (This step was the length culprit)
+      # STEP 2/3: AGGRESSIVE CLEANUP AND GCC WRAPPER (CONDITIONAL)
       # ----------------------------------------------------------------------------------
       - name: Aggressive DIBS Path Remediation (GCC Wrapper)
+        if: ${{ matrix.repo == 'Samsung/vlc-tizen' }} # ⬅️ Only runs for VLC
         shell: bash
         env:
           TIZEN_SDK: ${{ github.workspace }}/tizen-studio
@@ -411,7 +508,7 @@ jobs:
           # Move to project root (build/vlc-tizen)
           cd build/vlc-tizen
 
-          # Re-define variables and PATH needed for context
+          # Redefine essential variables and PATH
           SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           GCC_DIR="$GCC_ROOT/bin"
@@ -459,7 +556,7 @@ jobs:
           export LDFLAGS_FOR_BUILD=""
           echo "  BUILD_* variables explicitly set to clean state."
 
-          # 4. Patch freetype2/rules.mak
+          # 4. Patch freetype2/rules.mak 
           echo "🔧 PATCH: Injecting CFLAGS=\"\" into freetype2/rules.mak configure call."
           sed -i 's/cd \$(BUILDDIR)\/freetype/CFLAGS="" CPPFLAGS="" LDFLAGS="" cd \$(BUILDDIR)\/freetype/' vlc/contrib/src/freetype2/rules.mak
 
@@ -519,9 +616,10 @@ jobs:
           echo "🛡 Environment fully sanitized. Continuing to final build step."
 
       # ----------------------------------------------------------------------------------
-      # STEP 3: FINAL CROSS-COMPILE TEST, BUILD, AND PACKAGE
+      # STEP 3/3: FINAL CROSS-COMPILE TEST, BUILD, AND PACKAGE (CONDITIONAL)
       # ----------------------------------------------------------------------------------
       - name: Cross-Compile Test and Run Build
+        if: ${{ matrix.repo == 'Samsung/vlc-tizen' }} # ⬅️ Only runs for VLC
         shell: bash
         env:
           TIZEN_SDK: ${{ github.workspace }}/tizen-studio
@@ -530,20 +628,21 @@ jobs:
           set -e
           cd build/vlc-tizen
 
-          # Re-define all necessary variables
+          # Redefine all necessary variables and PATH for this final step
           SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           GCC_DIR="$GCC_ROOT/bin"
-          TARGET_TUPLE=arm-linux-gnueabi
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+          TARGET_TUPLE=arm-linux-gnueabi
+          
           GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
           
           # Re-establish PATH with wrapper (must be first) and ARM toolchain
           export PATH="$GCC_WRAPPER_DIR:$GCC_DIR:$PATH"
           hash -r
           
-          # Re-establish ARM toolchain variables (for main VLC configure)
+          # Re-establish ARM toolchain variables
           export AS="$GCC_DIR/arm-linux-gnueabi-as"
           export LD="$GCC_DIR/arm-linux-gnueabi-ld"
           export AR="$GCC_DIR/arm-linux-gnueabi-ar"
@@ -551,7 +650,7 @@ jobs:
           export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
           export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
           
-          # Safety cleanup of environment variables (in case they weren't exported in step 2)
+          # Safety cleanup of environment variables
           export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
           export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
@@ -560,7 +659,7 @@ jobs:
           cd vlc || true
           echo 'int main(){return 0;}' > test.c
           
-          echo "🔧 Enforcing real ARM toolchain for GCC"
+          echo "🔧 Enforcing real ARM toolchain for CC/CXX"
           # This sets the cross-compiler for the main VLC configure phase
           export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
           export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
