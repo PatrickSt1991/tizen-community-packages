@@ -621,6 +621,13 @@ jobs:
 
           echo "✅ GCC/G++ wrappers created in $GCC_WRAPPER_DIR (host compilers, no DIBS)."
 
+          echo "🔧 Installing gcc wrapper into contrib/arm-linux-gnueabi/bin (first in PATH for freetype)"
+          mkdir -p vlc/contrib/arm-linux-gnueabi/bin
+          cp "$GCC_WRAPPER_DIR/gcc" vlc/contrib/arm-linux-gnueabi/bin/gcc
+          chmod +x vlc/contrib/arm-linux-gnueabi/bin/gcc
+
+          echo "✅ Host gcc wrapper is now the first 'gcc' seen by contrib configure scripts."
+
           # 6. Apply Zlib internal test patch again (for robustness)
           echo "🔧 PATCH: Ensuring zlib internal test is skipped."
           sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
