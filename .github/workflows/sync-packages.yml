@@ -613,140 +613,143 @@ jobs:
           echo "Environment fully sanitized. Continuing to final build step."
 
       - name: Cross-Compile Test and Run Build
-        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }}
-        shell: bash
-        env:
-          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
-          TIZEN_PATH: ${{ github.workspace }}/tizen-studio
-        run: |
-          set -e
-          cd build/vlc-tizen
+        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }}
+        shell: bash
+        env:
+          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
+          TIZEN_PATH: ${{ github.workspace }}/tizen-studio
+        run: |
+          set -e
+          cd build/vlc-tizen
 
-          # Redefine all necessary variables and PATH for this final step
-          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
-          GCC_DIR="$GCC_ROOT/bin"
-          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-          TARGET_TUPLE=arm-linux-gnueabi
+          # Redefine all necessary variables and PATH for this final step
+          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
+          GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
+          GCC_DIR="$GCC_ROOT/bin"
+          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
+          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
+          TARGET_TUPLE=arm-linux-gnueabi
 
-          GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
+          GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
 
-          # Re-establish PATH with wrapper (must be first) and ARM toolchain
-          export PATH="$GCC_WRAPPER_DIR:$GCC_DIR:$PATH"
-          hash -r
+          # Re-establish PATH with wrapper (must be first) and ARM toolchain
+          export PATH="$GCC_WRAPPER_DIR:$GCC_DIR:$PATH"
+          hash -r
 
-          # Re-establish ARM toolchain variables
-          export AS="$GCC_DIR/arm-linux-gnueabi-as"
-          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
-          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
+          # Re-establish ARM toolchain variables
+          export AS="$GCC_DIR/arm-linux-gnueabi-as"
+          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
+          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
+          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
+          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
+          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
 
-          # Safety cleanup of environment variables
-          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          
-          unset CFLAGS || true
-          unset CPPFLAGS || true
-          unset CXXFLAGS || true
+          # Safety cleanup of environment variables (only removing DIBS paths)
+          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
 
-          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
-          
-          echo "🔧 Enforcing real ARM toolchain for CC/CXX"
-          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
-          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
+          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+          
+          echo "🔧 Enforcing real ARM toolchain for CC/CXX"
+          # CC/CXX must be the full command including sysroot for proper cross-compilation
+          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
+          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
 
-          # Final Cross-Compile Test
-          cd vlc || true
-          echo 'int main(){return 0;}' > test.c
+          # Final Cross-Compile Test
+          cd vlc || true
+          echo 'int main(){return 0;}' > test.c
 
-          echo "==== Running: $CC test.c -o test.out -v ===="
-          $CC test.c -o test.out -v || {
-            echo "❌ CROSS-COMPILER FAILED — THIS IS WHY configure SAYS 'cannot create executables'"
-            exit 1
-          }
+          echo "==== Running: $CC test.c -o test.out -v ===="
+          $CC test.c -o test.out -v || {
+            echo "❌ CROSS-COMPILER FAILED — THIS IS WHY configure SAYS 'cannot create executables'"
+            exit 1
+          }
 
-          echo "==== SUCCESS: cross compiler created test.out ===="
-          ls -l test.out || true
-          cd ..
+          echo "==== SUCCESS: cross compiler created test.out ===="
+          ls -l test.out || true
+          cd ..
 
-          # Final patches before running buildall.sh
-          echo "🔧 Forcing ARM binutils inside contrib main.mak"
-          sed -i "1i AS := ${GCC_DIR}/arm-linux-gnueabi-as"             vlc/contrib/src/main.mak
-          sed -i "2i LD := ${GCC_DIR}/arm-linux-gnueabi-ld"             vlc/contrib/src/main.mak
-          sed -i "3i AR := ${GCC_DIR}/arm-linux-gnueabi-ar"             vlc/contrib/src/main.mak
-          sed -i "4i NM := ${GCC_DIR}/arm-linux-gnueabi-nm"             vlc/contrib/src/main.mak
-          sed -i "5i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib"     vlc/contrib/src/main.mak
-          sed -i "6i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip"       vlc/contrib/src/main.mak
-          sed -i "7i PATH := ${GCC_DIR}:\$(PATH)\n"                     vlc/contrib/src/main.mak
+          # Final patches before running buildall.sh
+          echo "🔧 Patching vlc/contrib/src/main.mak"
+          # CRITICAL: HOST_CC/CXX must be the clean host compiler for sanity checks
+          sed -i "1i HOST_CC := \$(CC_FOR_BUILD)" vlc/contrib/src/main.mak
+          sed -i "2i HOST_CXX := \$(CXX_FOR_BUILD)" vlc/contrib/src/main.mak
+          
+          # Force ARM binutils for the contrib dependencies
+          sed -i "3i AS := ${GCC_DIR}/arm-linux-gnueabi-as"             vlc/contrib/src/main.mak
+          sed -i "4i LD := ${GCC_DIR}/arm-linux-gnueabi-ld"             vlc/contrib/src/main.mak
+          sed -i "5i AR := ${GCC_DIR}/arm-linux-gnueabi-ar"             vlc/contrib/src/main.mak
+          sed -i "6i NM := ${GCC_DIR}/arm-linux-gnueabi-nm"             vlc/contrib/src/main.mak
+          sed -i "7i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib"     vlc/contrib/src/main.mak
+          sed -i "8i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip"       vlc/contrib/src/main.mak
+          sed -i "9i PATH := ${GCC_DIR}:\$(PATH)\n"                     vlc/contrib/src/main.mak
 
-          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
-          sed -i 's|/root/\.dibs[^ ]*||g'   vlc/contrib/config.mak || true
-          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/src/main.mak || true
+          # Clean up remaining DIBS paths in config files
+          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
+          sed -i 's|/root/\.dibs[^ ]*||g'   vlc/contrib/config.mak || true
+          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/src/main.mak || true
 
-          echo "💥 FIX: Setting CC_FOR_BUILD to bypass DIBS path pollution."
-          export CC_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH gcc"
-          export CXX_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH g++"
-          export CFLAGS_FOR_BUILD=""
-          export CPPFLAGS_FOR_BUILD=""
-          export LDFLAGS_FOR_BUILD=""
+          echo "💥 FIX: Setting CC_FOR_BUILD to bypass DIBS path pollution."
+          export CC_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH gcc"
+          export CXX_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH g++"
+          export CFLAGS_FOR_BUILD=""
+          export CPPFLAGS_FOR_BUILD=""
+          export LDFLAGS_FOR_BUILD=""
 
-          echo "💥 Unsetting global C_*_PATH variables to prevent DIBS path pollution."
-          unset C_INCLUDE_PATH || true
-          unset CPLUS_INCLUDE_PATH || true
-          unset CPATH || true
+          echo "💥 Unsetting global C_*_PATH variables to prevent DIBS path pollution."
+          unset C_INCLUDE_PATH || true
+          unset CPLUS_INCLUDE_PATH || true
+          unset CPATH || true
 
-          # Final variable cleanup
-          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          # Final variable cleanup (DIBs path removal only)
+          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
+          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
 
-          echo "🔧 Starting buildall.sh"
-          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+          echo "🔧 Starting buildall.sh"
+          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
 
-          ./buildall.sh -a armv7l || {
-              echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
+          ./buildall.sh -a armv7l || {
+              echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
 
-              ROOT="vlc/contrib/contrib-tizen-arm-linux-gnueabi"
+              ROOT="vlc/contrib/contrib-tizen-arm-linux-gnueabi"
 
-              FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -name ".stamp-configure" | \
-                  while read f; do
-                      MOD=$(dirname "$f")
-                      if [[ ! -f "$MOD/.stamp-build" ]]; then
-                          echo "$MOD"
-                      fi
-                  done | head -n 1)
+              FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -name ".stamp-configure" | \
+                  while read f; do
+                      MOD=$(dirname "$f")
+                      if [[ ! -f "$MOD/.stamp-build" ]]; then
+                          echo "$MOD"
+                      fi
+                  done | head -n 1)
 
-              if [[ -z "$FAILED_MODULE" ]]; then
-                  echo "⚠ Could not detect failing module via stamps — fallback."
-                  FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d ! -name ".*" | head -n 1)
-              fi
+              if [[ -z "$FAILED_MODULE" ]]; then
+                  echo "⚠ Could not detect failing module via stamps — fallback."
+                  FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d ! -name ".*" | head -n 1)
+              fi
 
-              echo "🔥 REAL failing module: $FAILED_MODULE"
+              echo "🔥 REAL failing module: $FAILED_MODULE"
 
-              if [[ -f "$FAILED_MODULE/config.log" ]]; then
-                  echo "📄 FIRST 200 lines:"
-                  sed -n '1,200p' "$FAILED_MODULE/config.log"
+              if [[ -f "$FAILED_MODULE/config.log" ]]; then
+                  echo "📄 FIRST 200 lines:"
+                  sed -n '1,200p' "$FAILED_MODULE/config.log"
 
-                  echo "📄 LAST 200 lines:"
-                  tail -n 200 "$FAILED_MODULE/config.log"
-              else
-                  echo "⚠ No config.log (configure died before writing)"
-              fi
+                  echo "📄 LAST 200 lines:"
+                  tail -n 200 "$FAILED_MODULE/config.log"
+              else
+                  echo "⚠ No config.log (configure died before writing)"
+              fi
 
-              echo "🔁 Re-running make in failing module with full debug"
-              make -C "$FAILED_MODULE" V=1 --debug=b || true
+              echo "🔁 Re-running make in failing module with full debug"
+              make -C "$FAILED_MODULE" V=1 --debug=b || true
 
-              echo "❌ Stopping build."
-              exit 1
-          }
+              echo "❌ Stopping build."
+              exit 1
+          }
 
-          echo "Packaging WGT..."
-          expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
-          cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
+          echo "Packaging WGT..."
+          expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
+          cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
 
       - uses: softprops/action-gh-release@v2
         with:
