@@ -742,7 +742,7 @@ jobs:
           VLC_DIR="$PWD/vlc"
           echo "🧹 Removing autoconf config.cache files inside contrib"
           find "$VLC_DIR/contrib" -name config.cache -delete || true
-
+          unset CC CXX AS LD AR NM STRIP RANLIB CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
           ./buildall.sh -a armv7l || {
             echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
 
