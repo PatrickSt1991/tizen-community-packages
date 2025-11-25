@@ -48,18 +48,29 @@ jobs:
           curl -L -o tizen-installer-tmp/tizen-installer.zip "https://github.com/vlc-tizen/tizen-studio-install/releases/download/v1.1/tizen-studio-install-cli-Tizen-4.0.0.zip"
           unzip tizen-installer-tmp/tizen-installer.zip -d tizen-installer-tmp
           
+          # Find the installer binary (it might be named differently in the zip)
+          INSTALLER_BIN=$(find tizen-installer-tmp -name "*.bin" | head -n 1)
+          
+          if [ -z "$INSTALLER_BIN" ]; then
+            echo "❌ Error: No .bin installer found in the downloaded zip!"
+            ls -R tizen-installer-tmp
+            exit 1
+          fi
+          
+          echo "🚀 Found installer: $INSTALLER_BIN"
+          chmod +x "$INSTALLER_BIN"
+          
           # Create the final destination directory
           mkdir -p tizen-studio
           
-          # Run the install script, targeting the clean tizen-studio directory
-          # The install.sh script is in the temporary directory after unzip
-          tizen-installer-tmp/install.sh --accept-license --no-install-repo --install-dir tizen-studio
+          # Run the installer
+          "$INSTALLER_BIN" --accept-license --no-install-repo "${GITHUB_WORKSPACE}/tizen-studio"
 
       - name: Debug Tizen Studio Structure
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         run: |
           echo "Listing contents of tizen-studio to verify structure:"
-          ls -R tizen-studio
+          ls -R tizen-studio || true
           # Check if the CLI tool exists at the expected path
           if [ ! -f tizen-studio/tools/ide/bin/sdk-cli ]; then
             echo "❌ ERROR: Tizen SDK CLI not found at tizen-studio/tools/ide/bin/sdk-cli."
