@@ -620,9 +620,6 @@ jobs:
           chmod +x "$GCC_WRAPPER_DIR/g++"
 
 
-          sed -i "s|__REAL_GCC__|$REAL_GCC|" "$GCC_WRAPPER_DIR/gcc"
-          sed -i "s|__REAL_GPP__|$REAL_GPP|" "$GCC_WRAPPER_DIR/g++"
-
           echo "✅ GCC/G++ wrapper created in $GCC_WRAPPER_DIR. All native compiler calls are now filtered."
 
           # 6. Apply Zlib internal test patch again (for robustness)
