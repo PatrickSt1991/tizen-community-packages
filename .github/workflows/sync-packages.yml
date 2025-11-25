@@ -576,60 +576,62 @@ jobs:
           sed -i 's/cd \$(BUILDDIR)\/freetype/CFLAGS="" CPPFLAGS="" LDFLAGS="" cd \$(BUILDDIR)\/freetype/' vlc/contrib/src/freetype2/rules.mak
 
           # 5. 🔥 FINAL FILTER: Create a GCC/G++ wrapper
-          echo "🔧 WRAPPER: Creating clean gcc/g++ wrapper to force host compiler (no DIBS)."
-
+          echo "🔧 Creating native-only gcc/g++ wrappers (ARM untouched)"
+          
           GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
           mkdir -p "$GCC_WRAPPER_DIR"
-
-          # Make wrapper dir first in PATH
-          export PATH="$GCC_WRAPPER_DIR:$PATH"
+          
+          # ARM toolchain stays first. Wrappers come AFTER.
+          export PATH="$GCC_DIR:$PATH:$GCC_WRAPPER_DIR"
           hash -r
-
-          # Always use host compilers, never the Tizen cross gcc here
-          REAL_GCC="/usr/bin/gcc"
-          REAL_GPP="/usr/bin/g++"
-
-          echo "Creating gcc wrapper (host /usr/bin/gcc)..."
-          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/gcc"
-          echo 'REAL_BIN="/usr/bin/gcc"' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '  case "$arg" in' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '    *"/root/.dibs"*) ;;' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '    *) CLEAN_ARGS+=("$arg");;' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '  esac' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'done' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/gcc"
+          
+          # ----- gcc wrapper (NATIVE ONLY) -----
+          cat > "$GCC_WRAPPER_DIR/gcc" << 'EOF'
+          #!/bin/bash
+          REAL_BIN="/usr/bin/gcc"
+          
+          # If ARM compiler is being invoked, bypass wrapper.
+          for arg in "$@"; do
+              if [[ "$arg" == *arm-linux* ]]; then
+                  exec $REAL_BIN "$@"
+              fi
+          done
+          
+          # Strip DIBS
+          CLEAN_ARGS=()
+          for arg in "$@"; do
+              [[ "$arg" == *"/root/.dibs"* ]] && continue
+              CLEAN_ARGS+=("$arg")
+          done
+          
+          unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
+          exec $REAL_BIN "${CLEAN_ARGS[@]}"
+          EOF
           chmod +x "$GCC_WRAPPER_DIR/gcc"
-
-          echo "Creating g++ wrapper (host /usr/bin/g++)..."
-          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/g++"
-          echo 'REAL_BIN="/usr/bin/g++"' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/g++"
-          echo '  case "$arg" in' >> "$GCC_WRAPPER_DIR/g++"
-          echo '    *"/root/.dibs"*) ;;' >> "$GCC_WRAPPER_DIR/g++"
-          echo '    *) CLEAN_ARGS+=("$arg");;' >> "$GCC_WRAPPER_DIR/g++"
-          echo '  esac' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'done' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/g++"
+          
+          # ----- g++ wrapper (NATIVE ONLY) -----
+          cat > "$GCC_WRAPPER_DIR/g++" << 'EOF'
+          #!/bin/bash
+          REAL_BIN="/usr/bin/g++"
+          
+          for arg in "$@"; do
+              if [[ "$arg" == *arm-linux* ]]; then
+                  exec $REAL_BIN "$@"
+              fi
+          done
+          
+          CLEAN_ARGS=()
+          for arg in "$@"; do
+              [[ "$arg" == *"/root/.dibs"* ]] && continue
+              CLEAN_ARGS+=("$arg")
+          done
+          
+          unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
+          exec $REAL_BIN "${CLEAN_ARGS[@]}"
+          EOF
           chmod +x "$GCC_WRAPPER_DIR/g++"
-
-          echo "✅ GCC/G++ wrappers created in $GCC_WRAPPER_DIR (host compilers, no DIBS)."
-
-          echo "🔧 Installing gcc wrapper into contrib/arm-linux-gnueabi/bin (first in PATH for freetype)"
-          mkdir -p vlc/contrib/arm-linux-gnueabi/bin
-          cp "$GCC_WRAPPER_DIR/gcc" vlc/contrib/arm-linux-gnueabi/bin/gcc
-          chmod +x vlc/contrib/arm-linux-gnueabi/bin/gcc
-
-          echo "✅ Host gcc wrapper is now the first 'gcc' seen by contrib configure scripts."
-
-          # 6. Apply Zlib internal test patch again (for robustness)
-          echo "🔧 PATCH: Ensuring zlib internal test is skipped."
-          sed -i '/^CHECK_BEFORE_INSTALL/d' vlc/contrib/src/zlib/rules.mak || true
-          echo 'CHECK_BEFORE_INSTALL = ' >> vlc/contrib/src/zlib/rules.mak
+          
+          echo "✅ GCC/G++ wrappers created (native only, ARM-safe)"
           
           echo "Environment fully sanitized. Continuing to final build step."
 
