@@ -588,40 +588,41 @@ jobs:
           export PATH="$GCC_WRAPPER_DIR:$PATH"
           hash -r
 
-          # Find the actual system GCC binary (using the new PATH)
           REAL_GCC=$(which -a gcc | grep -v "$GCC_WRAPPER_DIR" | head -n 1)
-          if [[ -z "$REAL_GCC" ]]; then 
-              REAL_GCC="/usr/bin/gcc"
-          fi
+          REAL_GPP=$(echo "$REAL_GCC" | sed 's/gcc$/g++/g')
           
-          # --- Create GCC wrapper script ---
-          echo "Creating gcc wrapper..."
+          sed -i "s|__REAL_GCC__|$REAL_GCC|" "$GCC_WRAPPER_DIR/gcc"
+          sed -i "s|__REAL_GPP__|$REAL_GPP|" "$GCC_WRAPPER_DIR/g++"
+
+          
+          # gcc wrapper
           echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/gcc"
           echo '# Wrapper script to filter out toxic DIBS paths.' >> "$GCC_WRAPPER_DIR/gcc"
           echo "REAL_BIN=\"$REAL_GCC\"" >> "$GCC_WRAPPER_DIR/gcc" 
           echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/gcc"
           echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '    if [[ "$arg" =~ /root/.dibs ]]; then' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '        CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '    if [[ "$arg" == *"/root/.dibs"* ]]; then' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '        continue' >> "$GCC_WRAPPER_DIR/gcc"
           echo '    fi' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '    CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/gcc"
           echo 'done' >> "$GCC_WRAPPER_DIR/gcc"
           echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/gcc"
           chmod +x "$GCC_WRAPPER_DIR/gcc"
           
-          # --- Create G++ wrapper script ---
-          echo "Creating g++ wrapper..."
-          REAL_GPP=$(echo "$REAL_GCC" | sed 's/gcc$/g++/g')
+          # g++ wrapper
           echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/g++"
           echo '# Wrapper script to filter out toxic DIBS paths.' >> "$GCC_WRAPPER_DIR/g++"
           echo "REAL_BIN=\"$REAL_GPP\"" >> "$GCC_WRAPPER_DIR/g++" 
           echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/g++"
           echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/g++"
-          echo '    if [[ "$arg" != *"/root/.dibs/"* ]]; then' >> "$GCC_WRAPPER_DIR/g++"
-          echo '        CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/g++"
+          echo '    if [[ "$arg" == *"/root/.dibs"* ]]; then' >> "$GCC_WRAPPER_DIR/g++"
+          echo '        continue' >> "$GCC_WRAPPER_DIR/g++"
           echo '    fi' >> "$GCC_WRAPPER_DIR/g++"
+          echo '    CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/g++"
           echo 'done' >> "$GCC_WRAPPER_DIR/g++"
           echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/g++"
           chmod +x "$GCC_WRAPPER_DIR/g++"
+
 
           echo "✅ GCC/G++ wrapper created in $GCC_WRAPPER_DIR. All native compiler calls are now filtered."
 
@@ -645,6 +646,15 @@ jobs:
           # Redefine all necessary variables and PATH for this final step
           SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
+          
+          export TIZEN_SDK_VERSION=4.0
+          export TIZEN_SDK_SHORT_VERSION=4.0
+          export TIZEN_SDK_MAJOR=4
+          export TIZEN_SDK_MINOR=0
+          export TIZEN_API=4.0
+          export TIZEN_ABI=armv7l
+          export TARGET_TUPLE=arm-linux-gnueabi
+          
           GCC_DIR="$GCC_ROOT/bin"
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
@@ -735,6 +745,7 @@ jobs:
           export CPPFLAGS_FOR_BUILD=""
           export LDFLAGS_FOR_BUILD=""
 
+          VLC_DIR="$PWD/vlc"
           echo "🧹 Removing autoconf config.cache files inside contrib"
           find "$VLC_DIR/contrib" -name config.cache -delete || true
 
