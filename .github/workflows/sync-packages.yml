@@ -590,11 +590,7 @@ jobs:
 
           REAL_GCC=$(which -a gcc | grep -v "$GCC_WRAPPER_DIR" | head -n 1)
           REAL_GPP=$(echo "$REAL_GCC" | sed 's/gcc$/g++/g')
-          
-          sed -i "s|__REAL_GCC__|$REAL_GCC|" "$GCC_WRAPPER_DIR/gcc"
-          sed -i "s|__REAL_GPP__|$REAL_GPP|" "$GCC_WRAPPER_DIR/g++"
-
-          
+                  
           # gcc wrapper
           echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/gcc"
           echo '# Wrapper script to filter out toxic DIBS paths.' >> "$GCC_WRAPPER_DIR/gcc"
@@ -623,6 +619,9 @@ jobs:
           echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/g++"
           chmod +x "$GCC_WRAPPER_DIR/g++"
 
+
+          sed -i "s|__REAL_GCC__|$REAL_GCC|" "$GCC_WRAPPER_DIR/gcc"
+          sed -i "s|__REAL_GPP__|$REAL_GPP|" "$GCC_WRAPPER_DIR/g++"
 
           echo "✅ GCC/G++ wrapper created in $GCC_WRAPPER_DIR. All native compiler calls are now filtered."
 
