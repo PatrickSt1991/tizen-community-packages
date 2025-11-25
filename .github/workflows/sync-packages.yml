@@ -314,6 +314,15 @@ jobs:
           sed -i 's|-I/root/.dibs[^ ]*||g' "$VLC_DIR/contrib/src/main.mak" || true
           sed -i 's|-I/usr/include||g' "$VLC_DIR/contrib/src/main.mak" || true
           sed -i 's|-I/usr/local/include||g' "$VLC_DIR/contrib/src/main.mak" || true
+
+          echo "🔧 Forcing clean native compiler env for freetype2 (no DIBS)"
+          FREETYPE_RULES="$VLC_DIR/contrib/src/freetype2/rules.mak"
+          if [[ -f "$FREETYPE_RULES" ]]; then
+            sed -i 's|cd $(BUILDDIR)/freetype|CFLAGS="" CPPFLAGS="" LDFLAGS="" CC_FOR_BUILD="/usr/bin/env -i gcc" cd $(BUILDDIR)/freetype|' \
+              "$FREETYPE_RULES"
+          else
+            echo "⚠ freetype2 rules.mak not found (continuing anyway)"
+          fi
           
           echo "✔ VLC contrib sources adjusted"
 
@@ -709,6 +718,11 @@ jobs:
 
           echo "🔧 Starting buildall.sh"
           export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
+
+          export CC_FOR_BUILD="/usr/bin/env -i gcc"
+          export CFLAGS_FOR_BUILD=""
+          export CPPFLAGS_FOR_BUILD=""
+          export LDFLAGS_FOR_BUILD=""
 
           ./buildall.sh -a armv7l || {
             echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
