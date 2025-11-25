@@ -435,7 +435,17 @@ jobs:
 
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           GCC_DIR="$GCC_ROOT/bin"
-          
+
+          echo "🔧 Ensuring cross 'as' is visible to arm-linux-gnueabi-gcc"
+          if [[ -x "$GCC_DIR/arm-linux-gnueabi-as" ]]; then
+            (
+              cd "$GCC_DIR"
+              ln -sf arm-linux-gnueabi-as as
+            )
+          else
+            echo "⚠️ WARNING: $GCC_DIR/arm-linux-gnueabi-as not found"
+          fi
+
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
           export GCC_BIN GCC_PLUS_BIN
