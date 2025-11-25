@@ -701,18 +701,23 @@ jobs:
 
           # Final patches before running buildall.sh
           echo "🔧 Patching vlc/contrib/src/main.mak"
-          # CRITICAL: HOST_CC/CXX must be the clean host compiler for sanity checks
-          sed -i "1i HOST_CC := \$(CC_FOR_BUILD)" vlc/contrib/src/main.mak
-          sed -i "2i HOST_CXX := \$(CXX_FOR_BUILD)" vlc/contrib/src/main.mak
-          
-          # Force ARM binutils for the contrib dependencies
-          sed -i "3i AS := ${GCC_DIR}/arm-linux-gnueabi-as" vlc/contrib/src/main.mak
-          sed -i "4i LD := ${GCC_DIR}/arm-linux-gnueabi-ld" vlc/contrib/src/main.mak
-          sed -i "5i AR := ${GCC_DIR}/arm-linux-gnueabi-ar" vlc/contrib/src/main.mak
-          sed -i "6i NM := ${GCC_DIR}/arm-linux-gnueabi-nm" vlc/contrib/src/main.mak
-          sed -i "7i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib" vlc/contrib/src/main.mak
-          sed -i "8i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip" vlc/contrib/src/main.mak
-          sed -i "9i PATH := ${GCC_DIR}:\$(PATH)" vlc/contrib/src/main.mak
+
+          # Explicit ARM cross-compiler for contrib (matches the one that works in the debug re-run)
+          sed -i "1i CC := ${GCC_BIN} --sysroot=$SYSROOT -B$GCC_DIR" vlc/contrib/src/main.mak
+          sed -i "2i CXX := ${GCC_PLUS_BIN} --sysroot=$SYSROOT -B$GCC_DIR" vlc/contrib/src/main.mak
+
+          # Clean host compiler for native helper tools
+          sed -i "3i HOST_CC := \$(CC_FOR_BUILD)" vlc/contrib/src/main.mak
+          sed -i "4i HOST_CXX := \$(CXX_FOR_BUILD)" vlc/contrib/src/main.mak
+
+          # Force ARM binutils for the contrib deps
+          sed -i "5i AS := ${GCC_DIR}/arm-linux-gnueabi-as" vlc/contrib/src/main.mak
+          sed -i "6i LD := ${GCC_DIR}/arm-linux-gnueabi-ld" vlc/contrib/src/main.mak
+          sed -i "7i AR := ${GCC_DIR}/arm-linux-gnueabi-ar" vlc/contrib/src/main.mak
+          sed -i "8i NM := ${GCC_DIR}/arm-linux-gnueabi-nm" vlc/contrib/src/main.mak
+          sed -i "9i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib" vlc/contrib/src/main.mak
+          sed -i "10i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip" vlc/contrib/src/main.mak
+          sed -i "11i PATH := ${GCC_DIR}:\$(PATH)" vlc/contrib/src/main.mak
 
           # Clean up remaining DIBS paths in config files
           sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
