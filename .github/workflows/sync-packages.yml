@@ -41,13 +41,34 @@ jobs:
       - name: Download and install Tizen Studio 4.0
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         run: |
+          set -e # Critical: fail immediately if any command in this block fails
+          
+          # Use a temporary directory for the installer bundle
+          mkdir -p tizen-installer-tmp
+          curl -L -o tizen-installer-tmp/tizen-installer.zip "https://github.com/vlc-tizen/tizen-studio-install/releases/download/v1.1/tizen-studio-install-cli-Tizen-4.0.0.zip"
+          unzip tizen-installer-tmp/tizen-installer.zip -d tizen-installer-tmp
+          
+          # Create the final destination directory
           mkdir -p tizen-studio
-          curl -L -o tizen-installer "https://github.com/vlc-tizen/tizen-studio-install/releases/download/v1.1/tizen-studio-install-cli-Tizen-4.0.0.zip"
-          unzip tizen-installer -d tizen-studio
-          tizen-studio/install.sh --accept-license --no-install-repo --install-dir tizen-studio
+          
+          # Run the install script, targeting the clean tizen-studio directory
+          # The install.sh script is in the temporary directory after unzip
+          tizen-installer-tmp/install.sh --accept-license --no-install-repo --install-dir tizen-studio
+
+      - name: Debug Tizen Studio Structure
+        if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "Listing contents of tizen-studio to verify structure:"
+          ls -R tizen-studio
+          # Check if the CLI tool exists at the expected path
+          if [ ! -f tizen-studio/tools/ide/bin/sdk-cli ]; then
+            echo "❌ ERROR: Tizen SDK CLI not found at tizen-studio/tools/ide/bin/sdk-cli."
+            exit 1
+          fi
 
       - name: Setup Tizen SDK
         run: |
+          # This should now execute correctly as the path is verified
           tizen-studio/tools/ide/bin/sdk-cli install -p 'all'
           tizen-studio/tools/ide/bin/sdk-cli install -e 'mobile-4.0'
           tizen-studio/tools/ide/bin/sdk-cli install -e 'mobile-4.0-emulator'
@@ -187,18 +208,14 @@ jobs:
           set -e
           cd build/vlc-tizen
           
-          # Define host compiler path to bypass any aliases or hidden shell pollution
-          GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
-          
           # ------------------------------------------------------------------
           # 💥 CRITICAL: AGGRESSIVE CLEANUP OF POLLUTING DIBS PATHS
-          # This must run before any build scripts.
+          # This is to fix the 'Permission denied' error on the native compiler check (freetype).
           # ------------------------------------------------------------------
           echo "💥 FIX: Setting clean host compiler vars and aggressively unsetting DIBS path pollution."
 
           # 1. Define clean host compiler vars (used by contrib for native tools)
           # Use '/usr/bin/env -u ...' to guarantee a clean execution environment for the host compiler.
-          # Explicitly unsetting more variables that might be polluted.
           export CC_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH -u LD_LIBRARY_PATH -u LIBRARY_PATH gcc"
           export CXX_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH -u LD_LIBRARY_PATH -u LIBRARY_PATH g++"
           export CFLAGS_FOR_BUILD=""
@@ -266,7 +283,6 @@ jobs:
           echo "💥 FIX: Setting clean host compiler vars and aggressively unsetting DIBS path pollution."
 
           # 1. Define clean host compiler vars (used by VLC for native tools)
-          # Ensure this is defined here, as this step is a new shell.
           export CC_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH -u LD_LIBRARY_PATH -u LIBRARY_PATH gcc"
           export CXX_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH -u LD_LIBRARY_PATH -u LIBRARY_PATH g++"
           export CFLAGS_FOR_BUILD=""
