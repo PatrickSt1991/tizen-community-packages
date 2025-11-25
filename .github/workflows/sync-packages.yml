@@ -578,49 +578,58 @@ jobs:
           sed -i 's/cd \$(BUILDDIR)\/freetype/CFLAGS="" CPPFLAGS="" LDFLAGS="" cd \$(BUILDDIR)\/freetype/' vlc/contrib/src/freetype2/rules.mak
 
           # 5. 🔥 FINAL FILTER: Create a GCC/G++ wrapper
-          echo "🔧 WRAPPER: Creating clean gcc/g++ wrapper to filter DIBS paths."
+          echo "🔧 WRAPPER: Creating clean gcc/g++ wrapper to force host compiler (no DIBS)."
 
           # Create a temporary, high-priority directory
           GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
           mkdir -p "$GCC_WRAPPER_DIR"
           
-          # Inject it into PATH (before /usr/bin) and refresh hash
+          # Inject it into PATH (before everything else) and refresh hash
           export PATH="$GCC_WRAPPER_DIR:$PATH"
           hash -r
 
-          REAL_GCC=$(which -a gcc | grep -v "$GCC_WRAPPER_DIR" | head -n 1)
-          REAL_GPP=$(echo "$REAL_GCC" | sed 's/gcc$/g++/g')
-                  
-          # gcc wrapper
-          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/gcc"
-          echo '# Wrapper script to filter out toxic DIBS paths.' >> "$GCC_WRAPPER_DIR/gcc"
-          echo "REAL_BIN=\"$REAL_GCC\"" >> "$GCC_WRAPPER_DIR/gcc" 
-          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '    if [[ "$arg" == *"/root/.dibs"* ]]; then' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '        continue' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '    fi' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '    CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'done' >> "$GCC_WRAPPER_DIR/gcc"
-          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/gcc"
+          echo "Creating gcc wrapper (host /usr/bin/gcc)..."
+          cat > "$GCC_WRAPPER_DIR/gcc" << 'EOF'
+#!/bin/bash
+# Wrapper to force use of the host gcc and drop any DIBS-related flags.
+REAL_BIN="/usr/bin/gcc"
+
+CLEAN_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        *"/root/.dibs"*) ;;   # drop any arg that mentions /root/.dibs
+        *) CLEAN_ARGS+=("$arg");;
+    esac
+done
+
+# Make sure no include/library env vars drag DIBS back in
+unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
+
+exec "$REAL_BIN" "${CLEAN_ARGS[@]}"
+EOF
           chmod +x "$GCC_WRAPPER_DIR/gcc"
-          
-          # g++ wrapper
-          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/g++"
-          echo '# Wrapper script to filter out toxic DIBS paths.' >> "$GCC_WRAPPER_DIR/g++"
-          echo "REAL_BIN=\"$REAL_GPP\"" >> "$GCC_WRAPPER_DIR/g++" 
-          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/g++"
-          echo '    if [[ "$arg" == *"/root/.dibs"* ]]; then' >> "$GCC_WRAPPER_DIR/g++"
-          echo '        continue' >> "$GCC_WRAPPER_DIR/g++"
-          echo '    fi' >> "$GCC_WRAPPER_DIR/g++"
-          echo '    CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'done' >> "$GCC_WRAPPER_DIR/g++"
-          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/g++"
+
+          echo "Creating g++ wrapper (host /usr/bin/g++)..."
+          cat > "$GCC_WRAPPER_DIR/g++" << 'EOF'
+#!/bin/bash
+REAL_BIN="/usr/bin/g++"
+
+CLEAN_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        *"/root/.dibs"*) ;;   # drop any arg that mentions /root/.dibs
+        *) CLEAN_ARGS+=("$arg");;
+    esac
+done
+
+unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
+
+exec "$REAL_BIN" "${CLEAN_ARGS[@]}"
+EOF
           chmod +x "$GCC_WRAPPER_DIR/g++"
 
+          echo "✅ GCC/G++ wrappers created in $GCC_WRAPPER_DIR (host compilers, no DIBS)."
 
-          echo "✅ GCC/G++ wrapper created in $GCC_WRAPPER_DIR. All native compiler calls are now filtered."
 
           # 6. Apply Zlib internal test patch again (for robustness)
           echo "🔧 PATCH: Ensuring zlib internal test is skipped."
@@ -721,27 +730,9 @@ jobs:
           sed -i 's|/root/\.dibs[^ ]*||g'   vlc/contrib/config.mak || true
           sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/src/main.mak || true
 
-          echo "💥 FIX: Setting CC_FOR_BUILD to bypass DIBS path pollution."
-          export CC_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH gcc"
-          export CXX_FOR_BUILD="/usr/bin/env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CPATH g++"
-          export CFLAGS_FOR_BUILD=""
-          export CPPFLAGS_FOR_BUILD=""
-          export LDFLAGS_FOR_BUILD=""
-
-          echo "💥 Unsetting global C_*_PATH variables to prevent DIBS path pollution."
-          unset C_INCLUDE_PATH || true
-          unset CPLUS_INCLUDE_PATH || true
-          unset CPATH || true
-
-          # Final variable cleanup (DIBs path removal only)
-          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-
-          echo "🔧 Starting buildall.sh"
-          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
-
-          export CC_FOR_BUILD="/usr/bin/env -i gcc"
+          echo "💥 FIX: Setting CC_FOR_BUILD to use the clean host gcc/g++ wrappers."
+          export CC_FOR_BUILD="gcc"
+          export CXX_FOR_BUILD="g++"
           export CFLAGS_FOR_BUILD=""
           export CPPFLAGS_FOR_BUILD=""
           export LDFLAGS_FOR_BUILD=""
