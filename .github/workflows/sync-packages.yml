@@ -435,18 +435,6 @@ jobs:
 
           GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
           GCC_DIR="$GCC_ROOT/bin"
-
-          echo "🔧 Creating toolchain symlinks to prevent x86 fallback"
-          cd "$GCC_DIR"
-          ln -sf arm-linux-gnueabi-as as
-          ln -sf arm-linux-gnueabi-ld ld
-          ln -sf arm-linux-gnueabi-ar ar
-          ln -sf arm-linux-gnueabi-nm nm
-          ln -sf arm-linux-gnueabi-ranlib ranlib
-          ln -sf arm-linux-gnueabi-strip strip
-          ln -sf arm-linux-gnueabi-g++ g++
-          ln -sf arm-linux-gnueabi-gcc gcc
-          cd -
           
           GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
           GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
