@@ -309,12 +309,23 @@ jobs:
           echo "🔧 Patching contrib/src/ass/rules.mak to add freetype includes"
           sed -i '/^ASS_URL :=/a ASS_CFLAGS += -I\$\(PREFIX\)/include -I\$\(PREFIX\)/include/freetype2' \
             "$VLC_DIR/contrib/src/ass/rules.mak"
+
+          echo "🔧 Cleaning contrib/config.mak from global include pollution"
+          CONFIG_MAK="$VLC_DIR/contrib/config.mak"
+          sed -i 's|-I/root/.dibs[^ ]*||g' "$CONFIG_MAK" || true
+          sed -i 's|-I/usr/include||g' "$CONFIG_MAK" || true
+          sed -i 's|-I/usr/local/include||g' "$CONFIG_MAK" || true
+          sed -i 's|/root/.dibs[^ ]*||g' "$CONFIG_MAK" || true
           
           echo "🔧 Cleaning potential Samsung DIBS / global include pollution in contrib/src/main.mak (safe no-op if absent)"
           sed -i 's|-I/root/.dibs[^ ]*||g' "$VLC_DIR/contrib/src/main.mak" || true
           sed -i 's|-I/usr/include||g' "$VLC_DIR/contrib/src/main.mak" || true
           sed -i 's|-I/usr/local/include||g' "$VLC_DIR/contrib/src/main.mak" || true
 
+          echo "🔧 Cleaning global polluted LDFLAGS/LDLIBS (critical!)"
+          export LDFLAGS=$(echo "$LDFLAGS" | sed 's|-L/root/.dibs[^ ]*||g')
+          export LDLIBS=$(echo "$LDLIBS" | sed 's|-L/root/.dibs[^ ]*||g')
+          
           echo "🔧 Forcing clean native compiler env for freetype2 (no DIBS)"
           FREETYPE_RULES="$VLC_DIR/contrib/src/freetype2/rules.mak"
           if [[ -f "$FREETYPE_RULES" ]]; then
@@ -590,7 +601,7 @@ jobs:
           echo "REAL_BIN=\"$REAL_GCC\"" >> "$GCC_WRAPPER_DIR/gcc" 
           echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/gcc"
           echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/gcc"
-          echo '    if [[ "$arg" != *"/root/.dibs/"* ]]; then' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '    if [[ "$arg" =~ /root/.dibs ]]; then' >> "$GCC_WRAPPER_DIR/gcc"
           echo '        CLEAN_ARGS+=("$arg")' >> "$GCC_WRAPPER_DIR/gcc"
           echo '    fi' >> "$GCC_WRAPPER_DIR/gcc"
           echo 'done' >> "$GCC_WRAPPER_DIR/gcc"
@@ -723,6 +734,9 @@ jobs:
           export CFLAGS_FOR_BUILD=""
           export CPPFLAGS_FOR_BUILD=""
           export LDFLAGS_FOR_BUILD=""
+
+          echo "🧹 Removing autoconf config.cache files inside contrib"
+          find "$VLC_DIR/contrib" -name config.cache -delete || true
 
           ./buildall.sh -a armv7l || {
             echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
