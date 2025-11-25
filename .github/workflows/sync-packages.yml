@@ -580,56 +580,46 @@ jobs:
           # 5. 🔥 FINAL FILTER: Create a GCC/G++ wrapper
           echo "🔧 WRAPPER: Creating clean gcc/g++ wrapper to force host compiler (no DIBS)."
 
-          # Create a temporary, high-priority directory
           GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
           mkdir -p "$GCC_WRAPPER_DIR"
-          
-          # Inject it into PATH (before everything else) and refresh hash
+
+          # Make wrapper dir first in PATH
           export PATH="$GCC_WRAPPER_DIR:$PATH"
           hash -r
 
+          # Always use host compilers, never the Tizen cross gcc here
+          REAL_GCC="/usr/bin/gcc"
+          REAL_GPP="/usr/bin/g++"
+
           echo "Creating gcc wrapper (host /usr/bin/gcc)..."
-          cat > "$GCC_WRAPPER_DIR/gcc" << 'EOF'
-#!/bin/bash
-# Wrapper to force use of the host gcc and drop any DIBS-related flags.
-REAL_BIN="/usr/bin/gcc"
-
-CLEAN_ARGS=()
-for arg in "$@"; do
-    case "$arg" in
-        *"/root/.dibs"*) ;;   # drop any arg that mentions /root/.dibs
-        *) CLEAN_ARGS+=("$arg");;
-    esac
-done
-
-# Make sure no include/library env vars drag DIBS back in
-unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
-
-exec "$REAL_BIN" "${CLEAN_ARGS[@]}"
-EOF
+          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/gcc"
+          echo 'REAL_BIN="/usr/bin/gcc"' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '  case "$arg" in' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '    *"/root/.dibs"*) ;;' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '    *) CLEAN_ARGS+=("$arg");;' >> "$GCC_WRAPPER_DIR/gcc"
+          echo '  esac' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'done' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH' >> "$GCC_WRAPPER_DIR/gcc"
+          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/gcc"
           chmod +x "$GCC_WRAPPER_DIR/gcc"
 
           echo "Creating g++ wrapper (host /usr/bin/g++)..."
-          cat > "$GCC_WRAPPER_DIR/g++" << 'EOF'
-#!/bin/bash
-REAL_BIN="/usr/bin/g++"
-
-CLEAN_ARGS=()
-for arg in "$@"; do
-    case "$arg" in
-        *"/root/.dibs"*) ;;   # drop any arg that mentions /root/.dibs
-        *) CLEAN_ARGS+=("$arg");;
-    esac
-done
-
-unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
-
-exec "$REAL_BIN" "${CLEAN_ARGS[@]}"
-EOF
+          echo '#!/bin/bash' > "$GCC_WRAPPER_DIR/g++"
+          echo 'REAL_BIN="/usr/bin/g++"' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'CLEAN_ARGS=()' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'for arg in "$@"; do' >> "$GCC_WRAPPER_DIR/g++"
+          echo '  case "$arg" in' >> "$GCC_WRAPPER_DIR/g++"
+          echo '    *"/root/.dibs"*) ;;' >> "$GCC_WRAPPER_DIR/g++"
+          echo '    *) CLEAN_ARGS+=("$arg");;' >> "$GCC_WRAPPER_DIR/g++"
+          echo '  esac' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'done' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH' >> "$GCC_WRAPPER_DIR/g++"
+          echo 'exec "$REAL_BIN" "${CLEAN_ARGS[@]}"' >> "$GCC_WRAPPER_DIR/g++"
           chmod +x "$GCC_WRAPPER_DIR/g++"
 
           echo "✅ GCC/G++ wrappers created in $GCC_WRAPPER_DIR (host compilers, no DIBS)."
-
 
           # 6. Apply Zlib internal test patch again (for robustness)
           echo "🔧 PATCH: Ensuring zlib internal test is skipped."
