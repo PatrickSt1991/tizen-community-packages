@@ -633,7 +633,7 @@ jobs:
           GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
 
           # Re-establish PATH with wrapper (must be first) and ARM toolchain
-          export PATH="$GCC_WRAPPER_DIR:$GGC_DIR:$PATH"
+          export PATH="$GCC_WRAPPER_DIR:$GCC_DIR:$PATH"
           hash -r
 
           # Re-establish ARM toolchain variables
