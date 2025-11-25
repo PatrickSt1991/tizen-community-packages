@@ -582,9 +582,13 @@ jobs:
           mkdir -p "$GCC_WRAPPER_DIR"
           
           # ARM toolchain stays first. Wrappers come AFTER.
-          export PATH="$GCC_DIR:$PATH:$GCC_WRAPPER_DIR"
+          echo "🔧 Resetting PATH to known safe order"
+          export PATH="$GCC_DIR:$GCC_WRAPPER_DIR:/usr/bin:/bin:/usr/sbin:/sbin"
           hash -r
           
+          echo "PATH dump after reset:"
+          echo "$PATH" | tr ':' '\n'
+
           # ----- gcc wrapper (NATIVE ONLY) -----
           cat > "$GCC_WRAPPER_DIR/gcc" << 'EOF'
           #!/bin/bash
