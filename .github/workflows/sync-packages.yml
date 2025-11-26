@@ -738,6 +738,8 @@ jobs:
           export CFLAGS_FOR_BUILD=""
           export CPPFLAGS_FOR_BUILD=""
           export LDFLAGS_FOR_BUILD=""
+          export AS_FOR_BUILD="as"
+          export AR_FOR_BUILD="ar"
 
           VLC_DIR="$PWD/vlc"
           echo "🧹 Removing autoconf config.cache files inside contrib"
