@@ -206,13 +206,18 @@ jobs:
 
           for repo in $releases; do
             echo "Downloading release assets for $repo..."
+            repo_safe=$(echo "$repo" | tr '/' '_')
+
             api="https://api.github.com/repos/$repo/releases/latest"
             json=$(curl -s "$api")
             urls=$(echo "$json" | jq -r '.assets[].browser_download_url // empty')
 
             for url in $urls; do
-              echo "Downloading $url"
-              curl -L -o external_wgts/$(basename "$url") "$url"
+              fname=$(basename "$url")
+              out="external_wgts/${repo_safe}_${fname}"
+
+              echo "Downloading $url -> $out"
+              curl -L -o "$out" "$url"
             done
           done
 
