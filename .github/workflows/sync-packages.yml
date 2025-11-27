@@ -22,7 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache SDK
       - name: Restore Tizen SDK cache
         id: tizen-sdk-cache
         uses: actions/cache@v4
@@ -97,10 +96,12 @@ jobs:
           path: package.exp
           retention-days: 1
 
+
   generate-matrix-build:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -112,10 +113,10 @@ jobs:
                branch: .value.branch,
                build_script: (.value.build_script // ""),
                build_args: (.value.build_args // ""),
-               project_path: (.value.project_path // "."),
-               skip_npm: (.value.skip_npm // false)
+               project_path: (.value.project_path // ".")
             }]}' repos-build.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
 
   tizen-build:
     runs-on: ubuntu-latest
@@ -142,7 +143,7 @@ jobs:
       - name: Restore execute permissions
         run: chmod -R +x tizen-studio
 
-      - name: Install build dependencies
+      - name: Install runtime deps
         run: |
           sudo apt-get update
           sudo apt-get install -y expect
@@ -162,10 +163,9 @@ jobs:
           repo_dir="$(basename "${{ matrix.repo }}")"
           cd "$repo_dir"
 
-          # Switch to project_path from repos-build.json
           cd "${{ matrix.project_path }}"
 
-          echo "Building Tizen project in $(pwd)..."
+          echo "Building Tizen Web project in $(pwd)"
           "$TIZEN_PATH/tools/ide/bin/tizen" build-web
 
           echo "Packaging..."
@@ -173,30 +173,79 @@ jobs:
 
           cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" || true
 
-      - uses: softprops/action-gh-release@v2
+
+  external-downloads:
+    runs-on: ubuntu-latest
+    needs: tizen-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare folders
+        run: mkdir -p external_wgts
+
+      - name: Download WGTs from releases
+        shell: bash
+        run: |
+          releases=$(jq -r '.releases | to_entries[] | "\(.key)"' repos-external.json)
+          for repo in $releases; do
+            echo "🔽 Downloading release assets for $repo…"
+            api="https://api.github.com/repos/$repo/releases/latest"
+            json=$(curl -s "$api")
+            echo "$json" | jq -r '.assets[].browser_download_url' | \
+              while read url; do
+                [ -n "$url" ] || continue
+                echo "Downloading $url"
+                curl -L -o external_wgts/$(basename "$url") "$url"
+              done
+          done
+
+      - name: Download WGTs from commit sources
+        shell: bash
+        run: |
+          commits=$(jq -r '.commits | to_entries[] | "\(.key) \(.value)"' repos-external.json)
+          while read repo branch; do
+            [ -n "$repo" ] || continue
+            echo "🔽 Downloading commit WGT for $repo ($branch)…"
+
+            tmp=$(mktemp -d)
+            git clone --depth 1 --branch "$branch" "https://github.com/$repo.git" "$tmp"
+            find "$tmp" -name "*.wgt" -exec cp {} external_wgts/ \;
+            rm -rf "$tmp"
+          done <<< "$commits"
+
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: "community-${{ github.run_number }}"
-          name: "Community Packages ${{ github.run_number }}"
-          files: "wgt_files/*.wgt"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: external-wgts
+          path: external_wgts/
+
 
   publish-release:
     runs-on: ubuntu-latest
-    needs: tizen-build
+    needs: [tizen-build, external-downloads]
 
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: release-wgts
+          name: external-wgts
+          path: external
 
-      - name: List output files
-        run: ls -R release-wgts || true
+      - uses: actions/download-artifact@v4
+        with:
+          name: tizen-studio-artifact
+          path: studio
+
+      - name: Gather all WGT files
+        run: |
+          mkdir -p final_wgts
+          cp wgt_files/*.wgt final_wgts/ 2>/dev/null || true
+          cp external/*.wgt final_wgts/ 2>/dev/null || true
+          echo "Final WGT files:"
+          ls -l final_wgts
 
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: "community-${{ github.run_number }}"
           name: "Community Packages ${{ github.run_number }}"
-          files: "release-wgts/**/*.wgt"
+          files: "final_wgts/*.wgt"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
