@@ -95,6 +95,10 @@ jobs:
           path: package.exp
           retention-days: 1
 
+      - name: Restore execute permissions for Tizen Studio
+        run: |
+          chmod -R +x tizen-studio
+
   generate-matrix-build:
     runs-on: ubuntu-latest
     outputs:
