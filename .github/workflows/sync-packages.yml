@@ -15,12 +15,14 @@ env:
   NODE_OPTIONS: --openssl-legacy-provider
 
 jobs:
+
   prepare:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
+      # Cache SDK
       - name: Restore Tizen SDK cache
         id: tizen-sdk-cache
         uses: actions/cache@v4
@@ -28,7 +30,7 @@ jobs:
           path: tizen-studio
           key: tizen-web-sdk-4.0
 
-      - name: Install dependencies
+      - name: Install base dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y wget zip git jq nodejs npm expect curl unzip
@@ -58,7 +60,7 @@ jobs:
             -a "$CERT_NAME" -p "$CERT_PASSWORD" \
             -c NL -s Community -ct World \
             -o "$CERT_NAME" -n "$CERT_NAME" \
-            -e patrick@madebypatrick.nl -f "$CERT_NAME"
+            -e community@example.org -f "$CERT_NAME"
 
           ./tizen-studio/tools/ide/bin/tizen security-profiles add \
             -n "$CERT_NAME" \
@@ -68,7 +70,7 @@ jobs:
           ./tizen-studio/tools/ide/bin/tizen cli-config \
             "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
-      - name: Create expect script for packaging
+      - name: Create packaging expect script
         run: |
           printf '%s\n' \
             '#!/usr/bin/expect -f' \
@@ -101,6 +103,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+
       - id: set-matrix
         run: |
           matrix=$(jq -c \
@@ -108,7 +111,9 @@ jobs:
                repo: .key,
                branch: .value.branch,
                build_script: (.value.build_script // ""),
-               build_args:   (.value.build_args   // "")
+               build_args: (.value.build_args // ""),
+               project_path: (.value.project_path // "."),
+               skip_npm: (.value.skip_npm // false)
             }]}' repos-build.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -134,12 +139,15 @@ jobs:
           name: package-exp-artifact
           path: .
 
-      # 🔥 FIXED: Restore executable permissions for EVERYTHING
-      - name: Restore execute permissions for Tizen Studio
-        run: |
-          chmod -R +x tizen-studio
+      - name: Restore execute permissions
+        run: chmod -R +x tizen-studio
 
-      - name: Build standard Tizen Web project
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y expect
+
+      - name: Build Tizen Web Project
         shell: bash
         env:
           TIZEN_PATH: ${{ github.workspace }}/tizen-studio
@@ -151,19 +159,19 @@ jobs:
           git clone --depth 1 --branch "${{ matrix.branch }}" \
             "https://github.com/${{ matrix.repo }}.git"
 
-          cd "$(basename "${{ matrix.repo }}")"
+          repo_dir="$(basename "${{ matrix.repo }}")"
+          cd "$repo_dir"
 
-          if [[ -n "${{ matrix.build_script }}" ]]; then
-            echo "Running custom build script..."
-            bash "${{ matrix.build_script }}" ${{ matrix.build_args }}
-          else
-            echo "Running default Tizen web build..."
-            "$TIZEN_PATH/tools/ide/bin/tizen" build-web
-          fi
+          # Switch to project_path from repos-build.json
+          cd "${{ matrix.project_path }}"
+
+          echo "Building Tizen project in $(pwd)..."
+          "$TIZEN_PATH/tools/ide/bin/tizen" build-web
 
           echo "Packaging..."
           expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)"
-          cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
+
+          cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" || true
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -182,7 +190,7 @@ jobs:
         with:
           path: release-wgts
 
-      - name: List files
+      - name: List output files
         run: ls -R release-wgts || true
 
       - uses: softprops/action-gh-release@v2
