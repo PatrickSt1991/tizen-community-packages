@@ -6,6 +6,8 @@
     "reisxd/TizenBrew": "release"
   },
   "commits": {
-    "KaashDev/TVapp": "TVapp"
+  },
+  "direct": {
+    "KaashDev/TVapp": "https://raw.githubusercontent.com/KaashDev/TVapp/main/TVapp.wgt"
   }
 }
