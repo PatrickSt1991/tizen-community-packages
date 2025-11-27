@@ -168,7 +168,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: built-wgts
+          name: built-wgts-${{ matrix.repo }}
           path: wgt_files/
 
 
@@ -202,9 +202,10 @@ jobs:
         if: ${{ steps.config.outputs.config != '' }}
         run: |
           CFG="${{ steps.config.outputs.config }}"
-          repos=$(jq -r '.releases | to_entries[] | .key' "$CFG")
 
-          for repo in $repos; do
+          releases=$(jq -r '.releases | to_entries[] | .key' "$CFG" 2>/dev/null || true)
+
+          for repo in $releases; do
             echo "Downloading release assets for $repo..."
             api="https://api.github.com/repos/$repo/releases/latest"
             json=$(curl -s "$api")
@@ -220,7 +221,7 @@ jobs:
         if: ${{ steps.config.outputs.config != '' }}
         run: |
           CFG="${{ steps.config.outputs.config }}"
-          entries=$(jq -r '.commits | to_entries[] | "\(.key) \(.value)"' "$CFG")
+          entries=$(jq -r '.commits | to_entries[] | "\(.key) \(.value)"' "$CFG" 2>/dev/null || true)
 
           while read repo branch; do
             [ -n "$repo" ] || continue
@@ -245,7 +246,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: built-wgts
+          pattern: built-wgts-*
           path: built
 
       - uses: actions/download-artifact@v4
@@ -256,7 +257,7 @@ jobs:
       - name: Merge all wgt files
         run: |
           mkdir -p final_wgts
-          cp built/*.wgt final_wgts/ 2>/dev/null || true
+          cp built/**/*.wgt final_wgts/ 2>/dev/null || true
           cp external/*.wgt final_wgts/ 2>/dev/null || true
           echo "Final WGT files:"
           ls -l final_wgts
