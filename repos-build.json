@@ -1,9 +1,11 @@
 {
   "thonythony/fireplace": {
     "branch": "master",
-    "skip_npm": true
+    "skip_npm": true,
+    "project_path": "."
   },
   "fgl27/smarttv-twitch": {
-    "branch": "master"
+    "branch": "master",
+    "project_path": "app"
   }
 }
