@@ -134,6 +134,10 @@ jobs:
           name: package-exp-artifact
           path: .
 
+      - name: Restore execute permissions for Tizen Studio
+        run: |
+          chmod -R +x tizen-studio/tools/ide/bin
+
       - name: Build standard Tizen Web project
         shell: bash
         env:
