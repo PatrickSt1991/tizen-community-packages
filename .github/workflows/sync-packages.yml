@@ -108,6 +108,7 @@ jobs:
           matrix=$(jq -c \
             '{include: [to_entries[] | {
                repo: .key,
+               repo_id: (.key | gsub("/"; "-")),
                branch: .value.branch,
                project_path: (.value.project_path // ".")
             }]}' repos-build.json)
@@ -168,7 +169,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: built-wgts-${{ matrix.repo }}
+          name: built-wgts-${{ matrix.repo_id }}
           path: wgt_files/
 
 
