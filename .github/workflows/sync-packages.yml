@@ -42,7 +42,7 @@ jobs:
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
-          chmod -R +x tizen-studio/tools/ide/bin
+          chmod -R +x tizen-studio
 
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
@@ -95,10 +95,6 @@ jobs:
           path: package.exp
           retention-days: 1
 
-      - name: Restore execute permissions for Tizen Studio
-        run: |
-          chmod -R +x tizen-studio
-
   generate-matrix-build:
     runs-on: ubuntu-latest
     outputs:
@@ -138,9 +134,10 @@ jobs:
           name: package-exp-artifact
           path: .
 
+      # 🔥 FIXED: Restore executable permissions for EVERYTHING
       - name: Restore execute permissions for Tizen Studio
         run: |
-          chmod -R +x tizen-studio/tools/ide/bin
+          chmod -R +x tizen-studio
 
       - name: Build standard Tizen Web project
         shell: bash
