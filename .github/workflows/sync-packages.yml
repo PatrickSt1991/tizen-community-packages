@@ -21,92 +21,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # -----------------------------------------
-      # 🧩 CACHE: Tizen SDK (massive time saver)
-      # -----------------------------------------
       - name: Restore Tizen SDK cache
         id: tizen-sdk-cache
         uses: actions/cache@v4
         with:
           path: tizen-studio
-          key: tizen-sdk-4.0
+          key: tizen-web-sdk-4.0
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            wget zip git jq nodejs npm expect curl unzip build-essential \
-            libtool help2man ragel nasm protobuf-compiler meson
+          sudo apt-get install -y wget zip git jq nodejs npm expect curl unzip
 
-      - name: Download and install Tizen Studio 4.0
+      - name: Download and install Tizen Studio WEB CLI
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p tizen-studio
-          curl -L -o tizen-installer "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
+          curl -L -o tizen-installer \
+            "https://github.com/PatrickSt1991/tizen-community-packages/releases/download/tizen-deps-5.5/web-cli_Tizen_Studio_4.0_ubuntu-64.bin"
           chmod +x tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
           rm ./tizen-installer
           chmod -R +x tizen-studio/tools/ide/bin
 
-      - name: Install Tizen 4.0 rootstrap (0.0.62)
-        if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          set -e
-          cd tizen-studio
-
-          echo "⬇️ Downloading MOBILE-4.0 rootstrap 0.0.62..."
-          curl -L -o rootstrap.zip \
-            "https://download.tizen.org/sdk/tizenstudio/official/binary/mobile-4.0-rs-device.core_0.0.62_ubuntu-64.zip"
-
-          echo "📦 Extracting rootstrap..."
-          unzip -o rootstrap.zip
-
-          echo "📁 Moving rootstrap into final SDK path..."
-          mkdir -p platforms/tizen-4.0/mobile/rootstraps/
-          rsync -av data/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core \
-            platforms/tizen-4.0/mobile/rootstraps/
-
-          echo "🧹 Cleaning..."
-          rm -rf data rootstrap.zip
-
-          echo "✔ Rootstrap installed successfully"
-
-      - name: Install GCC 4.9 Cross Toolchain
-        if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          set -e
-          cd tizen-studio/tools
-
-          echo "⬇️ Downloading GCC 4.9 toolchain components..."
-          curl -L -O https://download.tizen.org/sdk/tizenstudio/official/binary/cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
-          curl -L -O https://download.tizen.org/sdk/tizenstudio/official/binary/cross-arm-gdb-7.8_1.1.2_ubuntu-64.zip
-          curl -L -O https://download.tizen.org/sdk/tizenstudio/official/binary/NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
-
-          echo "📦 Extracting cross toolchains..."
-          unzip -o cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
-          unzip -o cross-arm-gdb-7.8_1.1.2_ubuntu-64.zip
-          unzip -o NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
-          
-          echo "🔐 Applying execute permissions..."
-          find . -type d -name "*gcc-4.9*" -exec chmod -R +x {} \;
-          find . -type d -name "*gdb-7.8*" -exec chmod -R +x {} \;
-          find . -type f -name "arm-linux-gnueabi-*" -exec chmod +x {} \;
-          find . -type f -path "*/libexec/gcc/*/cc1" -exec chmod +x {} \;
-          find . -type f -path "*/libexec/gcc/*/cc1plus" -exec chmod +x {} \;
-
-          echo "🧹 Cleaning..."
-          rm cross-arm-gcc-4.9_1.1.0_ubuntu-64.zip
-          rm cross-arm-gdb-7.8_1.1.2_ubuntu-64.zip
-          rm NativeToolchain-Gcc-4.9_3.0.6_ubuntu-64.zip
-
-          echo "✔ GCC 4.9 installed"
-          
       - name: Save SDK to cache
         if: steps.tizen-sdk-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: tizen-studio
-          key: tizen-sdk-4.0
+          key: tizen-web-sdk-4.0
 
       - name: Create signing certificate
         run: |
@@ -115,7 +58,7 @@ jobs:
             -a "$CERT_NAME" -p "$CERT_PASSWORD" \
             -c NL -s Community -ct World \
             -o "$CERT_NAME" -n "$CERT_NAME" \
-            -e community@example.org -f "$CERT_NAME"
+            -e patrick@madebypatrick.nl -f "$CERT_NAME"
 
           ./tizen-studio/tools/ide/bin/tizen security-profiles add \
             -n "$CERT_NAME" \
@@ -125,7 +68,7 @@ jobs:
           ./tizen-studio/tools/ide/bin/tizen cli-config \
             "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
-      - name: Create expect script
+      - name: Create expect script for packaging
         run: |
           printf '%s\n' \
             '#!/usr/bin/expect -f' \
@@ -165,7 +108,7 @@ jobs:
                repo: .key,
                branch: .value.branch,
                build_script: (.value.build_script // ""),
-               build_args: (.value.build_args // "")
+               build_args:   (.value.build_args   // "")
             }]}' repos-build.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -191,599 +134,30 @@ jobs:
           name: package-exp-artifact
           path: .
 
-      - name: Install VLC prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            help2man ragel nasm yasm meson \
-            protobuf-compiler build-essential pkg-config \
-            automake autoconf libtool libtool-bin gettext \
-            cmake
-
-      # ----------------------------------------------
-      # 🧩 CACHE: VLC contrib & extras/tools
-      # ----------------------------------------------
-      - name: Restore VLC contrib cache
-        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }} # ⬅️ CORRECTED REPO
-        id: vlc-contrib-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            build/vlc-tizen/vlc/contrib/tarballs
-            build/vlc-tizen/vlc/extras/tools
-          key: vlc-contrib-cache-4e0fa1b
-
-      - name: Fix toolchain permissions after artifact restore
-        run: |
-          echo "🔧 Restoring execute bits for GCC toolchain"
-          find tizen-studio -type f -path "*/bin/arm-linux-gnueabi-*" -exec chmod +x {} \;
-          find tizen-studio -type f -path "*/libexec/gcc/*/cc1" -exec chmod +x {} \;
-          find tizen-studio -type f -path "*/libexec/gcc/*/cc1plus" -exec chmod +x {} \;
-      
-          echo "📌 cc1 permissions:"
-          find tizen-studio -name cc1 -exec ls -l {} \;
-
-      - name: Install 32-bit compatibility libs for GCC 4.9 cc1
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y \
-            libc6:i386 \
-            libstdc++6:i386 \
-            zlib1g:i386 \
-            libgcc-s1:i386 \
-            libgcc1:i386 \
-            libisl23:i386 \
-            libmpfr6:i386 \
-            libgmp10:i386 \
-            libmpc3:i386
-
-      # ----------------------------------------------------------------------
-      # STEP 1/3: Clone Project, Handle Standard Build Exit, Basic VLC Setup
-      # ----------------------------------------------------------------------
-      - name: Clone Project & Initial Setup (VLC or Standard)
+      - name: Build standard Tizen Web project
         shell: bash
         env:
-          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
           TIZEN_PATH: ${{ github.workspace }}/tizen-studio
         run: |
           set -e
-          mkdir -p "$GITHUB_WORKSPACE/wgt_files" build
+          mkdir -p build wgt_files
           cd build
 
           git clone --depth 1 --branch "${{ matrix.branch }}" \
             "https://github.com/${{ matrix.repo }}.git"
 
           cd "$(basename "${{ matrix.repo }}")"
-          repo_name="$(basename "${{ matrix.repo }}")"
 
-          # If NOT VLC-Tizen, run standard build and exit this step successfully.
-          if [[ "$repo_name" != "vlc-tizen" ]]; then
-            echo "Building standard web project..."
-            "$TIZEN_PATH/tools/ide/bin/tizen" build-web || true
-            "$TIZEN_PATH/tools/ide/bin/tizen" package \
-              -t wgt -o "$GITHUB_WORKSPACE/wgt_files/" || true
-            echo "Non-VLC repo finished. Subsequent VLC steps will be skipped by conditional logic."
-            exit 0
-          fi
-
-          # ------------------------------------------------------
-          #               VLC-TIZEN INITIAL SETUP (VLC Only)
-          # ------------------------------------------------------
-          echo "Building VLC-Tizen..."
-          
-          echo "Using Tizen SDK..."
-          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          export SYSROOT
-          echo "🔧 Using sysroot: $SYSROOT"
-
-          export TIZEN_SDK_VERSION=4.0
-          export TIZEN_SDK_SHORT_VERSION=4.0
-          export TIZEN_SDK_MAJOR=4
-          export TIZEN_SDK_MINOR=0
-          export TIZEN_API=4.0
-          export TIZEN_ABI=armv7l
-          export TARGET_TUPLE=arm-linux-gnueabi
-
-          export TIZEN_INCLUDES="$SYSROOT/usr/include"
-          export TIZEN_LIBS="$SYSROOT/usr/lib"
-          
-          # Proper pkg-config sysroot
-          export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
-          export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
-          export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
-          
-          # Clone VLC source
-          if [[ ! -d vlc ]]; then
-              git clone https://code.videolan.org/videolan/vlc.git vlc
-              pushd vlc
-              git checkout 4e0fa1b
-              cd ..
-          fi
-
-          echo "📌 Adjusting VLC sources (no external .patch files)"
-          
-          VLC_DIR="$PWD/vlc"
-          echo "VLC_DIR = $VLC_DIR"
-          
-          echo "🔧 Patching contrib/src/ass/rules.mak to add freetype includes"
-          sed -i '/^ASS_URL :=/a ASS_CFLAGS += -I\$\(PREFIX\)/include -I\$\(PREFIX\)/include/freetype2' \
-            "$VLC_DIR/contrib/src/ass/rules.mak"
-
-          echo "🔧 Cleaning contrib/config.mak from global include pollution"
-          CONFIG_MAK="$VLC_DIR/contrib/config.mak"
-          sed -i 's|-I/root/.dibs[^ ]*||g' "$CONFIG_MAK" || true
-          sed -i 's|-I/usr/include||g' "$CONFIG_MAK" || true
-          sed -i 's|-I/usr/local/include||g' "$CONFIG_MAK" || true
-          sed -i 's|/root/.dibs[^ ]*||g' "$CONFIG_MAK" || true
-          
-          echo "🔧 Cleaning potential Samsung DIBS / global include pollution in contrib/src/main.mak (safe no-op if absent)"
-          sed -i 's|-I/root/.dibs[^ ]*||g' "$VLC_DIR/contrib/src/main.mak" || true
-          sed -i 's|-I/usr/include||g' "$VLC_DIR/contrib/src/main.mak" || true
-          sed -i 's|-I/usr/local/include||g' "$VLC_DIR/contrib/src/main.mak" || true
-
-          echo "🔧 Cleaning global polluted LDFLAGS/LDLIBS (critical!)"
-          export LDFLAGS=$(echo "$LDFLAGS" | sed 's|-L/root/.dibs[^ ]*||g')
-          export LDLIBS=$(echo "$LDLIBS" | sed 's|-L/root/.dibs[^ ]*||g')
-          
-          echo "🔧 Forcing clean native compiler env for freetype2 (no DIBS)"
-          FREETYPE_RULES="$VLC_DIR/contrib/src/freetype2/rules.mak"
-          if [[ -f "$FREETYPE_RULES" ]]; then
-            sed -i 's|cd $(BUILDDIR)/freetype|CFLAGS="" CPPFLAGS="" LDFLAGS="" CC_FOR_BUILD="/usr/bin/env -i gcc" cd $(BUILDDIR)/freetype|' \
-              "$FREETYPE_RULES"
+          if [[ -n "${{ matrix.build_script }}" ]]; then
+            echo "Running custom build script..."
+            bash "${{ matrix.build_script }}" ${{ matrix.build_args }}
           else
-            echo "⚠ freetype2 rules.mak not found (continuing anyway)"
-          fi
-          
-          echo "✔ VLC contrib sources adjusted"
-
-          
-          # ------------------------------------------------------
-          # Pre-seed contrib tarballs
-          # ------------------------------------------------------
-          CONTRIB_DIR="vlc/contrib/tarballs"
-          mkdir -p "$CONTRIB_DIR"
-          
-          download() {
-              [[ -f "$CONTRIB_DIR/$1" ]] && { echo "✔ Cached $1"; return; }
-              echo "⬇️ Downloading $1"
-              curl -L --fail --retry 4 --retry-delay 2 "$2" -o "$CONTRIB_DIR/$1"
-          }
-
-          declare -A PKG_URLS=(
-            ["a52dec-0.7.4.tar.gz"]="https://downloads.videolan.org/pub/contrib/a52dec-0.7.4.tar.gz"
-            ["libass-0.13.0.tar.gz"]="https://downloads.videolan.org/testing/contrib/ass/libass-0.13.0.tar.gz"
-            ["libdvbpsi-1.3.0.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvbpsi/1.3.0/libdvbpsi-1.3.0.tar.bz2"
-            ["libdvdcss-1.3.99.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdcss/1.3.99/libdvdcss-1.3.99.tar.bz2"
-            ["libdvdnav-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdnav/5.0.3/libdvdnav-5.0.3.tar.bz2"
-            ["libdvdread-5.0.3.tar.bz2"]="https://downloads.videolan.org/pub/videolan/libdvdread/5.0.3/libdvdread-5.0.3.tar.bz2"
-            ["libebml-1.3.3.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/ebml/libebml-1.3.3.tar.bz2"
-            ["libmatroska-1.4.4.tar.bz2"]="https://downloads.videolan.org/pub/pub/contrib/matroska/libmatroska-1.4.4.tar.bz2"
-            ["libmad-0.15.1b.tar.gz"]="https://downloads.videolan.org/pub/contrib/libmad-0.15.1b.tar.gz"
-            ["libmpeg2-0.5.1.tar.gz"]="https://download.videolan.org/contrib/libmpeg2/libmpeg2-0.5.1.tar.gz"
-            ["flac-1.3.1.tar.xz"]="https://download.videolan.org/contrib/flac/flac-1.3.1.tar.xz"
-            ["freetype-2.6.1.tar.gz"]="https://download.videolan.org/contrib/freetype2/freetype-2.6.1.tar.gz"
-            ["fribidi-0.19.7.tar.bz2"]="https://download.videolan.org/contrib/fribidi/fribidi-0.19.7.tar.bz2"
-            ["harfbuzz-1.0.6.tar.bz2"]="https://download.videolan.org/pub/contrib/harfbuzz/harfbuzz-1.0.6.tar.bz2"
-            ["gnutls-3.2.21.tar.xz"]="https://downloads.videolan.org/pub/pub/contrib/gnutls/gnutls-3.2.21.tar.xz"
-            ["libtasn1-3.7.tar.gz"]="https://download.videolan.org/pub/pub/contrib/libtasn1/libtasn1-3.7.tar.gz"
-            ["libgcrypt-1.6.2.tar.bz2"]="https://download.videolan.org/contrib/gcrypt/libgcrypt-1.6.2.tar.bz2"
-            ["libgpg-error-1.18.tar.bz2"]="https://download.videolan.org/pub/contrib/gpg-error/libgpg-error-1.18.tar.bz2"
-            ["gmp-6.0.0.tar.bz2"]="https://download.videolan.org/contrib/gmp/gmp-6.0.0.tar.bz2"
-            ["libiconv-1.14.tar.gz"]="https://download.videolan.org/contrib/iconv/libiconv-1.14.tar.gz"
-            ["libxml2-2.9.2.tar.gz"]="https://download.videolan.org/pub/contrib/libxml2/libxml2-2.9.2.tar.gz"
-            ["jpegsrc.v9a.tar.gz"]="https://download.videolan.org/contrib/jpeg/jpegsrc.v9a.tar.gz"
-            ["live.2015.06.24.tar.gz"]="https://downloads.videolan.org/pub/contrib/live555/live.2015.06.24.tar.gz"
-            ["ffmpeg-HEAD.tar.xz"]="https://ffmpeg.org/releases/ffmpeg-4.4.tar.xz"
-            ["libmodplug-0.8.8.5.tar.gz"]="https://download.videolan.org/contrib/modplug/libmodplug-0.8.8.5.tar.gz"
-            ["nettle-2.7.1.tar.gz"]="https://download.videolan.org/contrib/nettle/nettle-2.7.1.tar.gz"
-            ["openjpeg-1.5.0.tar.gz"]="https://download.videolan.org/contrib/openjpeg/openjpeg-1.5.0.tar.gz"
-            ["libcddb-1.3.2.tar.bz2"]="https://download.videolan.org/testing/contrib/cddb/libcddb-1.3.2.tar.bz2"
-            ["chromaprint-1.0.tar.gz"]="https://download.videolan.org/contrib/chromaprint-1.0.tar.gz"
-            ["faad2-2.7.tar.gz"]="https://download.videolan.org/contrib/faad2/faad2-2.7.tar.gz"
-            ["libffi-3.0.13.tar.gz"]="https://download.videolan.org/testing/contrib/ffi/libffi-3.0.13.tar.gz"
-            ["fluidsynth-1.1.6.tar.bz2"]="https://download.videolan.org/contrib/fluid/fluidsynth-1.1.6.tar.bz2"
-            ["glew-1.7.0.tar.gz"]="https://download.videolan.org/testing/contrib/glew/glew-1.7.0.tar.gz"
-            ["glib-2.38.tar.xz"]="https://download.gnome.org/sources/glib/2.38/glib-2.38.0.tar.xz"
-            ["game-music-emu-0.6.0.tar.bz2"]="https://download.videolan.org/pub/contrib/gme/game-music-emu-0.6.0.tar.bz2"
-            ["growl-1.2.2.tar.bz2"]="https://download.videolan.org/testing/contrib/growl/growl-1.2.2.tar.bz2"
-            ["libkate-0.4.1.tar.gz"]="https://download.videolan.org/pub/pub/contrib/kate/libkate-0.4.1.tar.gz"
-            ["lame-3.99.5.tar.gz"]="https://download.videolan.org/pub/contrib/lame/lame-3.99.5.tar.gz"
-            ["mpg123-1.21.0.tar.bz2"]="https://download.videolan.org/contrib/mpg123/mpg123-1.21.0.tar.bz2"
-            ["libpng-1.6.19.tar.xz"]="https://download.videolan.org/pub/contrib/png/libpng-1.6.19.tar.xz"
-            ["projectM-2.0.1-Source.tar.gz"]="https://download.videolan.org/contrib/projectM/projectM-2.0.1-Source.tar.gz"
-            ["pthreads-w32-2-9-1-release.tar.gz"]="https://download.videolan.org/pub/contrib/pthreads/pthreads-w32-2-9-1-release.tar.gz"
-            ["sidplay-libs-2.1.1.tar.gz"]="https://download.videolan.org/pub/contrib/sidplay2/sidplay-libs-2.1.1.tar.gz"
-            ["soxr-0.1.2-Source.tar.xz"]="https://download.videolan.org/pub/contrib/soxr-0.1.2-Source.tar.xz"
-            ["tiff-4.0.3.tar.gz"]="https://download.videolan.org/contrib/tiff/tiff-4.0.3.tar.gz"
-            ["libtiger-0.3.1.tar.gz"]="https://download.videolan.org/pub/contrib/tiger/libtiger-0.3.1.tar.gz"
-            ["twolame-0.3.13.tar.gz"]="https://download.videolan.org/contrib/twolame/twolame-0.3.13.tar.gz"
-            ["libupnp-1.6.19.tar.bz2"]="https://download.videolan.org/contrib/upnp/libupnp-1.6.19.tar.bz2"
-            ["LibVNCServer-0.9.9.tar.gz"]="https://download.videolan.org/testing/contrib/vncclient/LibVNCServer-0.9.9.tar.gz"
-            ["zlib-1.2.8.tar.gz"]="https://download.videolan.org/pub/contrib/zlib/zlib-1.2.8.tar.gz"
-            ["zvbi-0.2.35.tar.bz2"]="https://download.videolan.org/contrib/zvbi/zvbi-0.2.35.tar.bz2"
-            ["libarchive-3.1.2.tar.gz"]="https://download.videolan.org/contrib/libarchive/libarchive-3.1.2.tar.gz"
-          )
-          
-          for F in "${!PKG_URLS[@]}"; do
-              download "$F" "${PKG_URLS[$F]}"
-          done
-          
-          echo "🧹 Removing previous contrib build (avoids poisoned includes)"
-          rm -rf vlc/contrib/contrib-tizen-arm-linux-gnueabi
-          
-          # ------------------------------------------------------
-          # libass / freetype include patch — CORRECT FIX
-          # ------------------------------------------------------
-          echo "🔧 Patching libass freetype paths"
-
-          sed -i \
-              's|ASS_CFLAGS =|ASS_CFLAGS = -I$$(PREFIX)/include -I$$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/ass/rules.mak
-          
-          # Ensure freetype flags include correct root
-          sed -i \
-              's|FREETYPE_CFLAGS="|FREETYPE_CFLAGS="-I$$(PREFIX)/include/freetype2 |' \
-              vlc/contrib/src/ass/rules.mak
-
-          # ------------------------------------------------------
-          # CORRECT GCC 4.9 CROSS-COMPILER SETUP (FINAL FIX)
-          # ------------------------------------------------------
-
-          echo "==== TOOLCHAIN BINARIES ===="
-          echo "🔧 Setting correct toolchain path"
-
-          GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
-          GCC_DIR="$GCC_ROOT/bin"
-
-          echo "🔧 Ensuring cross 'as' is visible to arm-linux-gnueabi-gcc"
-          if [[ -x "$GCC_DIR/arm-linux-gnueabi-as" ]]; then
-            (
-              cd "$GCC_DIR"
-              ln -sf arm-linux-gnueabi-as as
-            )
-          else
-            echo "⚠️ WARNING: $GCC_DIR/arm-linux-gnueabi-as not found"
+            echo "Running default Tizen web build..."
+            "$TIZEN_PATH/tools/ide/bin/tizen" build-web
           fi
 
-          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-          export GCC_BIN GCC_PLUS_BIN
-
-          echo "GCC_DIR = $GCC_DIR"
-
-          # Put cross-compiler first in PATH; GCC will find cc1 in libexec automatically
-          export PATH="$GCC_DIR:$PATH"
-
-          # Only log the REAL cc1 directory - DO NOT touch it
-          TARGET_TUPLE=arm-linux-gnueabi
-          REAL_CC1_DIR="$GCC_ROOT/libexec/gcc/$TARGET_TUPLE/4.9.2"
-          echo "📌 Expected cc1 directory: $REAL_CC1_DIR"
-
-          if [ -d "$REAL_CC1_DIR" ]; then
-            echo "📂 Listing cc1 directory:"
-            ls -l "$REAL_CC1_DIR" || true
-          else
-            echo "⚠️ WARNING: cc1 directory not found – toolchain may be incomplete"
-          fi
-
-          echo "✔ Using GCC directory: $GCC_DIR"
-          export PATH="$GCC_DIR:$PATH"
-          echo "🔧 PATH updated to prefer ARM toolchain"
-          
-          # ARM cross binutils
-          export AS="$GCC_DIR/arm-linux-gnueabi-as"
-          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
-          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-          
-          
-          export CC_FOR_BUILD=gcc
-          export CXX_FOR_BUILD=g++
-          export CPP_FOR_BUILD=cpp
-          export LD_FOR_BUILD=ld
-          export AS_FOR_BUILD=as
-          export AR_FOR_BUILD=ar
-          export NM_FOR_BUILD=nm
-          export RANLIB_FOR_BUILD=ranlib
-          export STRIP_FOR_BUILD=strip
-          
-          
-          # Disable AC_RUN_IFELSE and AC_TRY_RUN for cross compile
-          mkdir -p vlc/contrib/m4
-          cat << 'EOF' > vlc/contrib/m4/disable-run.m4
-          AC_DEFUN([AC_TRY_RUN],[
-            AC_MSG_NOTICE([Cross-compile: skipping run test])
-            AS_VAR_SET($2, ["$3"])
-          ])
-          AC_DEFUN([AC_RUN_IFELSE],[
-            AC_MSG_NOTICE([Cross-compile: skipping run test])
-            ifelse([$3], , :, [$3])
-          ])
-          EOF
-          
-          export ACLOCAL_PATH="$PWD/vlc/contrib/m4:$PWD/vlc/extras/tools/m4"
-          export AUTOM4TE_SUBDIRS="$PWD/vlc/contrib/m4"
-          
-          echo "🛡 VLC initial environment established. Continuing to cleanup steps."
-
-      # ----------------------------------------------------------------------------------
-      # STEP 2/3: AGGRESSIVE CLEANUP AND GCC WRAPPER (CONDITIONAL)
-      # ----------------------------------------------------------------------------------
-      - name: Aggressive DIBS Path Remediation (GCC Wrapper)
-        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }} # ⬅️ CORRECTED REPO
-        shell: bash
-        env:
-          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
-          TIZEN_PATH: ${{ github.workspace }}/tizen-studio
-        run: |
-          set -e
-          # Move to project root (build/vlc-tizen)
-          cd build/vlc-tizen
-
-          # Redefine essential variables and PATH
-          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
-          GCC_DIR="$GCC_ROOT/bin"
-          export PATH="$GCC_DIR:$PATH"
-          
-          # Function to define cleanup CFLAGS/CPPFLAGS/etc.
-          cleanup_env() {
-              local var_name=$1
-              local clean_value
-              clean_value=$(echo "${!var_name}" | sed 's|[-I-L]/root/\.dibs[^ ]*||g')
-              export "$var_name"="$(echo "$clean_value" | xargs)"
-              echo "  $var_name cleaned."
-          }
-
-          echo "🔧 Broad cleaning of DIBS paths in config files..."
-          grep -RIl "dibs" vlc/contrib --exclude-dir=.git --exclude="*.tar.gz" 2>/dev/null | while read -r f; do
-              echo "⚠️  Cleaning DIBS paths in: $f"
-              sed -i 's|-I/root/\.dibs[^ ]*||g' "$f"
-              sed -i 's|/root/\.dibs[^ ]*||g' "$f"
-              sed -i 's|dibs[^ ]*||g' "$f"
-          done || true
-
-          # ----------------------------------------------
-          # 🔥 CRITICAL FIX: AGGRESSIVE ENVIRONMENT CLEANUP
-          # ----------------------------------------------
-          echo "🔧 EMERGENCY CLEANUP: Performing scorched-earth cleanup for DIBS paths."
-
-          # 1. Unset all known global variables
-          unset C_INCLUDE_PATH || true
-          unset CPLUS_INCLUDE_PATH || true
-          unset CPATH || true
-          unset LIBRARY_PATH || true
-          echo "  Global path variables unset."
-
-          # 2. Aggressively clean standard flags
-          cleanup_env CFLAGS
-          cleanup_env CPPFLAGS
-          cleanup_env CXXFLAGS
-          cleanup_env LDFLAGS
-          
-          # 3. Clear the NATIVE/BUILD-specific flags
-          export CC_FOR_BUILD="gcc"
-          export CFLAGS_FOR_BUILD=""
-          export CPPFLAGS_FOR_BUILD=""
-          export LDFLAGS_FOR_BUILD=""
-          echo "  BUILD_* variables explicitly set to clean state."
-
-          # 4. Patch freetype2/rules.mak 
-          echo "🔧 PATCH: Injecting CFLAGS=\"\" into freetype2/rules.mak configure call."
-          sed -i 's/cd \$(BUILDDIR)\/freetype/CFLAGS="" CPPFLAGS="" LDFLAGS="" cd \$(BUILDDIR)\/freetype/' vlc/contrib/src/freetype2/rules.mak
-
-          # 5. 🔥 FINAL FILTER: Create a GCC/G++ wrapper
-          echo "🔧 Creating native-only gcc/g++ wrappers (ARM untouched)"
-          
-          GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
-          mkdir -p "$GCC_WRAPPER_DIR"
-          
-          # ARM toolchain stays first. Wrappers come AFTER.
-          echo "🔧 Resetting PATH to known safe order"
-          export PATH="$GCC_DIR:$GCC_WRAPPER_DIR:/usr/bin:/bin:/usr/sbin:/sbin"
-          hash -r
-          
-          echo "PATH dump after reset:"
-          echo "$PATH" | tr ':' '\n'
-
-          # ----- gcc wrapper (NATIVE ONLY) -----
-          cat > "$GCC_WRAPPER_DIR/gcc" << 'EOF'
-          #!/bin/bash
-          REAL_BIN="/usr/bin/gcc"
-          
-          # If ARM compiler is being invoked, bypass wrapper.
-          for arg in "$@"; do
-              if [[ "$arg" == *arm-linux* ]]; then
-                  exec $REAL_BIN "$@"
-              fi
-          done
-          
-          # Strip DIBS
-          CLEAN_ARGS=()
-          for arg in "$@"; do
-              [[ "$arg" == *"/root/.dibs"* ]] && continue
-              CLEAN_ARGS+=("$arg")
-          done
-          
-          unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
-          exec $REAL_BIN "${CLEAN_ARGS[@]}"
-          EOF
-          chmod +x "$GCC_WRAPPER_DIR/gcc"
-          
-          # ----- g++ wrapper (NATIVE ONLY) -----
-          cat > "$GCC_WRAPPER_DIR/g++" << 'EOF'
-          #!/bin/bash
-          REAL_BIN="/usr/bin/g++"
-          
-          for arg in "$@"; do
-              if [[ "$arg" == *arm-linux* ]]; then
-                  exec $REAL_BIN "$@"
-              fi
-          done
-          
-          CLEAN_ARGS=()
-          for arg in "$@"; do
-              [[ "$arg" == *"/root/.dibs"* ]] && continue
-              CLEAN_ARGS+=("$arg")
-          done
-          
-          unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH LIBRARY_PATH
-          exec $REAL_BIN "${CLEAN_ARGS[@]}"
-          EOF
-          chmod +x "$GCC_WRAPPER_DIR/g++"
-          
-          echo "✅ GCC/G++ wrappers created (native only, ARM-safe)"
-          
-          echo "Environment fully sanitized. Continuing to final build step."
-
-      - name: Cross-Compile Test and Run Build
-        if: ${{ matrix.repo == 'TizenTeam/vlc-tizen' }}
-        shell: bash
-        env:
-          TIZEN_SDK: ${{ github.workspace }}/tizen-studio
-          TIZEN_PATH: ${{ github.workspace }}/tizen-studio
-        run: |
-          set -e
-          cd build/vlc-tizen
-
-          # Redefine all necessary variables and PATH for this final step
-          SYSROOT="$TIZEN_SDK/platforms/tizen-4.0/mobile/rootstraps/mobile-4.0-device.core"
-          GCC_ROOT="$TIZEN_SDK/tools/data/tools/arm-linux-gnueabi-gcc-4.9"
-          
-          export TIZEN_SDK_VERSION=4.0
-          export TIZEN_SDK_SHORT_VERSION=4.0
-          export TIZEN_SDK_MAJOR=4
-          export TIZEN_SDK_MINOR=0
-          export TIZEN_API=4.0
-          export TIZEN_ABI=armv7l
-          export TARGET_TUPLE=arm-linux-gnueabi
-          
-          GCC_DIR="$GCC_ROOT/bin"
-          GCC_BIN="$GCC_DIR/arm-linux-gnueabi-gcc"
-          GCC_PLUS_BIN="$GCC_DIR/arm-linux-gnueabi-g++"
-          TARGET_TUPLE=arm-linux-gnueabi
-
-          GCC_WRAPPER_DIR=$(pwd)/gcc_wrapper
-          ln -sf "$GCC_DIR/arm-linux-gnueabi-ld" "$GCC_DIR/ld"
-
-          # Re-establish PATH with wrapper (must be first) and ARM toolchain
-          export PATH="$GCC_DIR:$GCC_WRAPPER_DIR:$PATH"
-          hash -r
-
-          # Re-establish ARM toolchain variables
-          export AS="$GCC_DIR/arm-linux-gnueabi-as"
-          export LD="$GCC_DIR/arm-linux-gnueabi-ld"
-          export AR="$GCC_DIR/arm-linux-gnueabi-ar"
-          export NM="$GCC_DIR/arm-linux-gnueabi-nm"
-          export RANLIB="$GCC_DIR/arm-linux-gnueabi-ranlib"
-          export STRIP="$GCC_DIR/arm-linux-gnueabi-strip"
-
-          # Safety cleanup of environment variables (only removing DIBS paths)
-          export CFLAGS=$(echo "$CFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CPPFLAGS=$(echo "$CPPFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-          export CXXFLAGS=$(echo "$CXXFLAGS" | sed 's|-I/root/\.dibs[^ ]*||g')
-
-          export VERBOSE=1 V=1 MAKEFLAGS="-j1" CCACHE_DISABLE=1
-          
-          echo "🔧 Enforcing real ARM toolchain for CC/CXX"
-          # CC/CXX must be the full command including sysroot for proper cross-compilation
-          export CC="$GCC_BIN --sysroot=$SYSROOT -B$GCC_DIR"
-          export CXX="$GCC_PLUS_BIN --sysroot=$SYSROOT -B$GCC_DIR"
-
-          # Final Cross-Compile Test
-          cd vlc || true
-          echo 'int main(){return 0;}' > test.c
-
-          echo "==== Running: $CC test.c -o test.out -v ===="
-          $CC test.c -o test.out -v || {
-            echo "❌ CROSS-COMPILER FAILED — THIS IS WHY configure SAYS 'cannot create executables'"
-            exit 1
-          }
-
-          echo "==== SUCCESS: cross compiler created test.out ===="
-          ls -l test.out || true
-          cd ..
-
-          # Final patches before running buildall.sh
-          echo "🔧 Patching vlc/contrib/src/main.mak"
-
-          # Explicit ARM cross-compiler for contrib (matches the one that works in the debug re-run)
-          sed -i "1i CC := ${GCC_BIN} --sysroot=$SYSROOT -B$GCC_DIR" vlc/contrib/src/main.mak
-          sed -i "2i CXX := ${GCC_PLUS_BIN} --sysroot=$SYSROOT -B$GCC_DIR" vlc/contrib/src/main.mak
-
-          # Clean host compiler for native helper tools
-          sed -i "3i HOST_CC := \$(CC_FOR_BUILD)" vlc/contrib/src/main.mak
-          sed -i "4i HOST_CXX := \$(CXX_FOR_BUILD)" vlc/contrib/src/main.mak
-
-          # Force ARM binutils for the contrib deps
-          sed -i "5i AS := ${GCC_DIR}/arm-linux-gnueabi-as" vlc/contrib/src/main.mak
-          sed -i "6i LD := ${GCC_DIR}/arm-linux-gnueabi-ld" vlc/contrib/src/main.mak
-          sed -i "7i AR := ${GCC_DIR}/arm-linux-gnueabi-ar" vlc/contrib/src/main.mak
-          sed -i "8i NM := ${GCC_DIR}/arm-linux-gnueabi-nm" vlc/contrib/src/main.mak
-          sed -i "9i RANLIB := ${GCC_DIR}/arm-linux-gnueabi-ranlib" vlc/contrib/src/main.mak
-          sed -i "10i STRIP := ${GCC_DIR}/arm-linux-gnueabi-strip" vlc/contrib/src/main.mak
-          sed -i "11i PATH := ${GCC_DIR}:\$(PATH)" vlc/contrib/src/main.mak
-
-          # Clean up remaining DIBS paths in config files
-          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/config.mak || true
-          sed -i 's|/root/\.dibs[^ ]*||g'   vlc/contrib/config.mak || true
-          sed -i 's|-I/root/\.dibs[^ ]*||g' vlc/contrib/src/main.mak || true
-
-          echo "💥 FIX: Setting CC_FOR_BUILD to use the clean host gcc/g++ wrappers."
-          export CC_FOR_BUILD="gcc"
-          export CXX_FOR_BUILD="g++"
-          export CFLAGS_FOR_BUILD=""
-          export CPPFLAGS_FOR_BUILD=""
-          export LDFLAGS_FOR_BUILD=""
-          export AS_FOR_BUILD="as"
-          export AR_FOR_BUILD="ar"
-
-          VLC_DIR="$PWD/vlc"
-          echo "🧹 Removing autoconf config.cache files inside contrib"
-          find "$VLC_DIR/contrib" -name config.cache -delete || true
-          unset CC CXX AS LD AR NM STRIP RANLIB CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
-          ./buildall.sh -a armv7l || {
-            echo "❌ buildall.sh FAILED — locating REAL failing contrib module..."
-
-            ROOT="vlc/contrib/contrib-tizen-arm-linux-gnueabi"
-
-            FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -name ".stamp-configure" | \
-              while read f; do
-                MOD=$(dirname "$f")
-                if [[ ! -f "$MOD/.stamp-build" ]]; then
-                  echo "$MOD"
-                fi
-              done | head -n 1)
-
-            if [[ -z "$FAILED_MODULE" ]]; then
-              echo "⚠ Could not detect failing module via stamps — fallback."
-              FAILED_MODULE=$(find "$ROOT" -maxdepth 2 -type d ! -name ".*" | head -n 1)
-            fi
-
-            echo "🔥 REAL failing module: $FAILED_MODULE"
-
-            if [[ -f "$FAILED_MODULE/config.log" ]]; then
-              echo "📄 FIRST 200 lines:"
-              sed -n '1,200p' "$FAILED_MODULE/config.log"
-
-              echo "📄 LAST 200 lines:"
-              tail -n 200 "$FAILED_MODULE/config.log"
-            else
-              echo "⚠ No config.log (configure died before writing)"
-            fi
-
-            echo "🔁 Re-running make in failing module with full debug"
-            make -C "$FAILED_MODULE" V=1 --debug=b || true
-
-            echo "❌ Stopping build."
-            exit 1
-          }
-
-          echo "Packaging WGT..."
-          expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)" || true
+          echo "Packaging..."
+          expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)"
           cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" 2>/dev/null || true
 
       - uses: softprops/action-gh-release@v2
