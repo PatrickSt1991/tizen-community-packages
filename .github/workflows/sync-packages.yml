@@ -108,7 +108,8 @@ jobs:
                repo: .key,
                repo_id: (.key | gsub("/"; "-")),
                branch: .value.branch,
-               project_path: (.value.project_path // ".")
+               project_path: (.value.project_path // "."),
+               output_name: (.value.output_name // "")
             }]}' repos-build.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -163,12 +164,20 @@ jobs:
           echo "Packaging..."
           expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)"
 
-          cp -r ./*.wgt "$GITHUB_WORKSPACE/wgt_files/" || true
+          actual=$(ls *.wgt | head -n 1)
+          desired="${{ matrix.output_name }}"
+
+          if [ -z "$desired" ] || [ "$desired" = "null" ]; then
+            desired="$actual"
+          fi
+
+          cp "$actual" "$GITHUB_WORKSPACE/wgt_files/$desired"
 
       - uses: actions/upload-artifact@v4
         with:
           name: built-wgts-${{ matrix.repo_id }}
           path: wgt_files/
+
 
   external-downloads:
     runs-on: ubuntu-latest
@@ -200,57 +209,44 @@ jobs:
         if: ${{ steps.config.outputs.config != '' }}
         run: |
           CFG="${{ steps.config.outputs.config }}"
-          releases=$(jq -r '.releases | to_entries[] | .key' "$CFG" 2>/dev/null || true)
+          repos=$(jq -r '.releases | to_entries[] | .key' "$CFG")
 
-          for repo in $releases; do
-            echo "Downloading release assets for $repo..."
-            repo_safe=$(echo "$repo" | tr '/' '_')
+          for repo in $repos; do
+            branch=$(jq -r ".releases[\"$repo\"].branch" "$CFG")
+            outname=$(jq -r ".releases[\"$repo\"].output_name" "$CFG")
 
             api="https://api.github.com/repos/$repo/releases/latest"
             json=$(curl -s "$api")
-            urls=$(echo "$json" | jq -r '.assets[].browser_download_url // empty')
 
-            for url in $urls; do
-              fname=$(basename "$url")
-              out="external_wgts/${repo_safe}_${fname}"
+            url=$(echo "$json" | jq -r '.assets[].browser_download_url // empty' | head -n 1)
 
-              echo "Downloading $url -> $out"
-              curl -L -o "$out" "$url"
-            done
+            if [ -z "$outname" ] || [ "$outname" = "null" ]; then
+              outname="$(basename "$url")"
+            fi
+
+            curl -L -o "external_wgts/$outname" "$url"
           done
-
-      - name: Download commit-based WGTs
-        if: ${{ steps.config.outputs.config != '' }}
-        run: |
-          CFG="${{ steps.config.outputs.config }}"
-          entries=$(jq -r '.commits | to_entries[] | "\(.key) \(.value)"' "$CFG" 2>/dev/null || true)
-
-          while read repo branch; do
-            [ -n "$repo" ] || continue
-            echo "Downloading commit WGT for $repo:$branch"
-
-            tmp=$(mktemp -d)
-            git clone --depth 1 --branch "$branch" "https://github.com/$repo.git" "$tmp"
-            find "$tmp" -name "*.wgt" -exec cp {} external_wgts/ \;
-            rm -rf "$tmp"
-          done <<< "$entries"
 
       - name: Download direct WGT URLs
         if: ${{ steps.config.outputs.config != '' }}
         run: |
           CFG="${{ steps.config.outputs.config }}"
-          entries=$(jq -r '.direct | to_entries[] | "\(.key) \(.value)"' "$CFG" 2>/dev/null || true)
-
-          while read repo url; do
+          jq -r '.direct | to_entries[] | "\(.key) \(.value.url // .value) \(.value.output_name // "")"' "$CFG" |
+          while read repo url outname; do
             [ -n "$repo" ] || continue
-            echo "Downloading direct WGT for $repo: $url"
-            curl -L -o "external_wgts/${repo##*/}.wgt" "$url"
-          done <<< "$entries"
+
+            if [ -z "$outname" ] || [ "$outname" = "null" ]; then
+              outname="${repo##*/}.wgt"
+            fi
+
+            curl -L -o "external_wgts/$outname" "$url"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
           name: external-wgts
           path: external_wgts/
+
 
   publish-release:
     runs-on: ubuntu-latest
