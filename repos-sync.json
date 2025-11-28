@@ -8,8 +8,8 @@
   "commits": {
   },
   "direct": {
-    "TizenTVWebApp/TizenTVAudioRecorder": "https://raw.githubusercontent.com/TizenTVWebApp/TizenTVAudioRecorder/master/TizenTVAudioRecorder.wgt"
-    "TizenTVWebApp/TVideoPlayer": "https://raw.githubusercontent.com/TizenTVWebApp/TVideoPlayer/master/TVideoPlayer.wgt"
+    "TizenTVWebApp/TizenTVAudioRecorder": "https://raw.githubusercontent.com/TizenTVWebApp/TizenTVAudioRecorder/master/TizenTVAudioRecorder.wgt",
+    "TizenTVWebApp/TVideoPlayer": "https://raw.githubusercontent.com/TizenTVWebApp/TVideoPlayer/master/TVideoPlayer.wgt",
     "KaashDev/TVapp": "https://raw.githubusercontent.com/KaashDev/TVapp/main/TVapp.wgt"
   }
 }
