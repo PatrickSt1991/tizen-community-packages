@@ -29,6 +29,10 @@
     "KaashDev/TVapp": {
       "url": "https://raw.githubusercontent.com/KaashDev/TVapp/main/TVapp.wgt",
       "output_name": "TVApp.wgt"
+    },
+    "yadPe/PlayerAVPlay": {
+      "url": "https://raw.githubusercontent.com/yadPe/PlayerAVPlay/master/PlayerAVPlay.wgt",
+      "output_name": "PlayerAVPlay.wgt"
     }
   }
 }
