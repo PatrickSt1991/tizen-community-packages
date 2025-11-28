@@ -1,15 +1,34 @@
 {
   "releases": {
-    "OneLiberty/moonlight-chrome-tizen": "release",
-    "MrPhaze62/moonlight-chrome-tizen-no-gamemode": "release",
-    "PatrickSt1991/Sportlink.Club.Info.Viewer": "release",
-    "reisxd/TizenBrew": "release"
-  },
-  "commits": {
+    "OneLiberty/moonlight-chrome-tizen": {
+      "branch": "release",
+      "output_name": "Moonlight.wgt"
+    },
+    "MrPhaze62/moonlight-chrome-tizen-no-gamemode": {
+      "branch": "release",
+      "output_name": "Moonlight-NoGame.wgt"
+    },
+    "PatrickSt1991/Sportlink.Club.Info.Viewer": {
+      "branch": "release",
+      "output_name": "ClubInfoBoard.wgt"
+    },
+    "reisxd/TizenBrew": {
+      "branch": "release",
+      "output_name": "TizenBrew.wgt"
+    }
   },
   "direct": {
-    "TizenTVWebApp/TizenTVAudioRecorder": "https://raw.githubusercontent.com/TizenTVWebApp/TizenTVAudioRecorder/master/TizenTVAudioRecorder.wgt",
-    "TizenTVWebApp/TVideoPlayer": "https://raw.githubusercontent.com/TizenTVWebApp/TVideoPlayer/master/TVideoPlayer.wgt",
-    "KaashDev/TVapp": "https://raw.githubusercontent.com/KaashDev/TVapp/main/TVapp.wgt"
+    "TizenTVWebApp/TizenTVAudioRecorder": {
+      "url": "https://raw.githubusercontent.com/TizenTVWebApp/TizenTVAudioRecorder/master/TizenTVAudioRecorder.wgt",
+      "output_name": "AudioRecorder.wgt"
+    },
+    "TizenTVWebApp/TVideoPlayer": {
+      "url": "https://raw.githubusercontent.com/TizenTVWebApp/TVideoPlayer/master/TVideoPlayer.wgt",
+      "output_name": "VideoPlayer.wgt"
+    },
+    "KaashDev/TVapp": {
+      "url": "https://raw.githubusercontent.com/KaashDev/TVapp/main/TVapp.wgt",
+      "output_name": "TVApp.wgt"
+    }
   }
 }
