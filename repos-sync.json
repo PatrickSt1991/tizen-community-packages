@@ -33,6 +33,10 @@
     "yadPe/PlayerAVPlay": {
       "url": "https://raw.githubusercontent.com/yadPe/PlayerAVPlay/master/PlayerAVPlay.wgt",
       "output_name": "PlayerAVPlay.wgt"
+    },
+    "futo-org/FCastReceiver": {
+      "url": "https://dl.fcast.org/tizen/1.0.0/FCastReceiver.wgt",
+      "output_name": "FCastReceiver.wgt"
     }
   }
 }
