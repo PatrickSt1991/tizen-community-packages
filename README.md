@@ -16,6 +16,7 @@
 - [Current Packages](#-current-packages)
 - [Contributing & Requesting Apps](#-contributing--requesting-apps)
 - [Disclaimer](#️-disclaimer)
+- [Additional Note](#-additional-note)
 - [License](#-license)
 
 ---
@@ -84,6 +85,12 @@ This is a **community-driven project** and is **not officially affiliated with o
 > **THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND.**  
 > All applications remain the property of their respective owners.  
 > Please support the original developers by visiting their official pages.
+
+---
+
+## 📝 Additional Note
+
+You need to make a Samsung Certificate (Tools > Certficate Manager) to run any of the packages listed above. In case you're having any issues, refer to [Connection Guide](https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/tv-device.html).
 
 ---
 
