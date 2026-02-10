@@ -15,6 +15,10 @@
     "reisxd/TizenBrew": {
       "branch": "release",
       "output_name": "TizenBrew.wgt"
+    },
+    "dos-ise/doom-tizen": {
+      "branch": "main",
+      "output_name": "Doom.wgt"
     }
   },
   "direct": {
