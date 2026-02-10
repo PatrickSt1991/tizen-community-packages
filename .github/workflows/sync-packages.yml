@@ -208,22 +208,41 @@ jobs:
       - name: Download release WGTs
         if: ${{ steps.config.outputs.config != '' }}
         run: |
+          set -e
           CFG="${{ steps.config.outputs.config }}"
           repos=$(jq -r '.releases | to_entries[] | .key' "$CFG")
 
           for repo in $repos; do
-            branch=$(jq -r ".releases[\"$repo\"].branch" "$CFG")
             outname=$(jq -r ".releases[\"$repo\"].output_name" "$CFG")
 
-            api="https://api.github.com/repos/$repo/releases/latest"
-            json=$(curl -s "$api")
+            latest_api="https://api.github.com/repos/$repo/releases/latest"
+            list_api="https://api.github.com/repos/$repo/releases?per_page=20"
 
+            echo "Fetching release for $repo ..."
+
+            # 1) Try "latest" (non-prerelease)
+            json=$(curl -fsSL "$latest_api" 2>/dev/null || true)
+
+            # If /latest didn't work or has no assets, fallback to newest prerelease from /releases
             url=$(echo "$json" | jq -r '.assets[].browser_download_url // empty' | head -n 1)
+            if [ -z "$url" ]; then
+              echo "No /latest asset found for $repo, falling back to newest prerelease..."
+              json=$(curl -fsSL "$list_api")
+
+              # pick the newest prerelease (first match in the releases list)
+              url=$(echo "$json" | jq -r '[.[] | select(.prerelease==true and .draft==false) ][0].assets[0].browser_download_url // empty')
+            fi
+
+            if [ -z "$url" ]; then
+              echo "ERROR: No release asset found for $repo (latest or prerelease)."
+              exit 1
+            fi
 
             if [ -z "$outname" ] || [ "$outname" = "null" ]; then
               outname="$(basename "$url")"
             fi
 
+            echo "Downloading $url -> external_wgts/$outname"
             curl -L -o "external_wgts/$outname" "$url"
           done
 
