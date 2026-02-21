@@ -19,7 +19,12 @@
     "dos-ise/doom-tizen": {
       "branch": "main",
       "output_name": "Doom.wgt"
+    },
+    "dos-ise/openttd-tizem": {
+       "branch": "main",
+       "output_name": "TransportTycoonDeluxe.wgt"
     }
+
   },
   "direct": {
     "TizenTVWebApp/TizenTVAudioRecorder": {
