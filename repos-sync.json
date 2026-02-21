@@ -20,7 +20,7 @@
       "branch": "main",
       "output_name": "Doom.wgt"
     },
-    "dos-ise/openttd-tizem": {
+    "dos-ise/openttd-tizen": {
        "branch": "master",
        "output_name": "TransportTycoonDeluxe.wgt"
     }
