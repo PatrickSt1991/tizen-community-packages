@@ -1,5 +1,9 @@
 {
-  "releases": {
+  "releases": { 
+    "brightcraft/moonlight-tizen": {
+      "branch": "release",
+      "output_name": "Moonlight-Tizen.wgt"
+    },
     "OneLiberty/moonlight-chrome-tizen": {
       "branch": "release",
       "output_name": "Moonlight.wgt"
@@ -24,7 +28,6 @@
        "branch": "master",
        "output_name": "TransportTycoonDeluxe.wgt"
     }
-
   },
   "direct": {
     "TizenTVWebApp/TizenTVAudioRecorder": {
