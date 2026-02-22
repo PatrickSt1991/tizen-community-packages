@@ -21,11 +21,11 @@
       "output_name": "TizenBrew.wgt"
     },
     "dos-ise/doom-tizen": {
-      "branch": "main",
+      "branch": "release",
       "output_name": "Doom.wgt"
     },
     "dos-ise/openttd-tizen": {
-       "branch": "master",
+       "branch": "release",
        "output_name": "TransportTycoonDeluxe.wgt"
     }
   },
