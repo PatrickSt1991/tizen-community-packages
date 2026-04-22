@@ -43,7 +43,7 @@ Please check the [Releases](../../releases) page for version-specific details.
 | **Fireplace** | Transform your Samsung Smart TV into a fireplace. | [thonythony](https://github.com/thonythony/fireplace) |
 | **TVapp** | Enable seamless playback of HLS/m3u8 streams as channels. | [KaashDev](https://github.com/KaashDev/TVapp) |
 | **Twitch** | Twitch client for Samsung Smart TVs 2015 and newer models. | [fgl27](https://github.com/fgl27/smarttv-twitch) |
-| **Club Info Board** | Dé oplossing voor sportverenigingen om wedstrijdinformatie real-time en overzichtelijk te tonen op schermen binnen de club! | [PatrickSt1991](https://github.com/PatrickSt1991/Sportlink.Club.Info.Viewer) |
+| **Sportlink Club Viewer** | Solution for sports clubs to display match information in real time and in a clear, organized way on screens throughout the club! | [PatrickSt1991](https://github.com/PatrickSt1991/Sportlink.Club.Info.Viewer) |
 | **TizenBrew** | A way to experience modded websites and you can install newer apps without fighting with Tizen Studio. | [reisxd](https://github.com/reisxd/TizenBrew) |
 | **TizenTVAudioRecorder** | HTML5 Audio Recorder (kalaoke App). | [TizenTVWebApp](https://github.com/TizenTVWebApp/TizenTVAudioRecorder) |
 | **TVideoPlayer** | Tizen TV HTML video player based on videojs. | [TizenTVWebApp](https://github.com/TizenTVWebApp/TVideoPlayer) |
