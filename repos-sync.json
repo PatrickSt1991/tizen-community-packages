@@ -14,7 +14,7 @@
     },
     "PatrickSt1991/Sportlink.Club.Info.Viewer": {
       "branch": "release",
-      "output_name": "ClubInfoBoard.wgt"
+      "output_name": "Sportlink-Club-Viewer.wgt"
     },
     "reisxd/TizenBrew": {
       "branch": "release",
