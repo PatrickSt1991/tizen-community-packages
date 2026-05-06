@@ -10,4 +10,9 @@
     "project_path": "app",
     "output_name": "SmartTV_Twitch.wgt"
   }
+  "aleksilassila/reiverr": {
+    "branch": "master",
+    "project_path": "",
+    "output_name": "Reiverr.wgt"
+  }  
 }
