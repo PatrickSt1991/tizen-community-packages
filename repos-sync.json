@@ -16,6 +16,10 @@
       "branch": "release",
       "output_name": "Sportlink-Club-Viewer.wgt"
     },
+    "PatrickSt1991/vlc-tizen-tv": {
+      "branch": "release",
+      "output_name": "vlc-tizen-tv.wgt"
+    },
     "reisxd/TizenBrew": {
       "branch": "release",
       "output_name": "TizenBrew.wgt"
