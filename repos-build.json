@@ -9,10 +9,11 @@
     "branch": "master",
     "project_path": "app",
     "output_name": "SmartTV_Twitch.wgt"
-  }
+  },
   "aleksilassila/reiverr": {
     "branch": "master",
-    "project_path": "",
-    "output_name": "Reiverr.wgt"
-  }  
+    "project_path": "tizen",
+    "output_name": "Reiverr.wgt",
+    "pre_build": "npm install --no-audit --no-fund && VITE_PLATFORM=tv npx vite build --mode production --outDir tizen/dist"
+  }
 }
