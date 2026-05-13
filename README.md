@@ -53,7 +53,7 @@ Please check the [Releases](../../releases) page for version-specific details.
 | **Doom** | A WebAssembly-powered port of Doom packaged as a Samsung Tizen TV application. | [dos-ise](https://github.com/dos-ise/doom-tizen) |
 | **TransportTycoonDeluxe** | OpenTTD is an open source simulation game based upon Transport Tycoon Deluxe. | [dos-ise](https://github.com/dos-ise/OpenTTD-Tizen) |
 | **Reiverr** | A clean combined interface for Jellyfin, TMDB, Radarr and Sonarr, as well as a replacement to Overseerr. | [aleksilassila](https://github.com/aleksilassila/reiverr) |
-| **Nuvio** | TV-first streaming UI for Samsung Tizen, built from a fork of NuvioMedia/NuvioWeb that is kept in sync with upstream daily. | [PatrickSt1991](https://github.com/PatrickSt1991/NuvioWeb) |
+| **Nuvio** | TV-first streaming UI for Samsung Tizen. | [NuvioMedia](https://github.com/NuvioMedia/NuvioWeb) |
 
 
 > 💡 Want your app listed here? See the [Contributing](#-contributing--requesting-apps) section below.
