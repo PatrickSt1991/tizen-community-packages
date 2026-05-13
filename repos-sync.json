@@ -31,6 +31,10 @@
     "dos-ise/openttd-tizen": {
        "branch": "release",
        "output_name": "TransportTycoonDeluxe.wgt"
+    },
+    "PatrickSt1991/NuvioWeb": {
+      "branch": "main",
+      "output_name": "Nuvio.wgt"
     }
   },
   "direct": {

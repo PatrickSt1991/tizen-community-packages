@@ -1,0 +1,20 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Workflow build output (local runs)
+build/
+wgt_files/
+external_wgts/
+final_wgts/
+tizen-studio/
+tizen-studio-data/

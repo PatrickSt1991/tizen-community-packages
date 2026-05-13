@@ -1,5 +1,0 @@
---- a/contrib/src/freetype2/rules.mak
-+++ b/contrib/src/freetype2/rules.mak
-@@ -1 +1 @@
--CPPFLAGS += -I/usr/include
-+CFLAGS := $(filter-out -I/usr/include -I/usr/local/include,$(CFLAGS))
