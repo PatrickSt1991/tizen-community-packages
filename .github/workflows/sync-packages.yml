@@ -329,39 +329,38 @@ jobs:
 
             echo "Fetching release for $repo ..."
 
-            # 1) Try /releases/latest (non-prerelease).
+            # 1) Try /releases/latest (non-prerelease, non-draft).
             json=$(curl -fsSL "$latest_api" 2>/dev/null || echo '')
-            asset_count=$(echo "$json" | jq -r '(.assets // []) | length' 2>/dev/null || echo 0)
 
-            # 2) Fallback to newest non-draft prerelease if /latest had no assets.
-            if [ "$asset_count" = "0" ]; then
+            # 2) Probe whether /latest actually gave us a usable URL.
+            #    Note: relying on a count is fragile because `jq` on empty
+            #    input exits 0 with no output, so the `|| echo 0` fallback
+            #    never fires. Probing for an actual URL avoids that.
+            probe_url=$(echo "$json" | jq -r '(.assets // [])[] | .browser_download_url // empty' 2>/dev/null | head -n 1 || echo '')
+
+            # 3) Fall back to newest non-draft prerelease if /latest had nothing.
+            if [ -z "$probe_url" ]; then
               echo "  No /latest assets for $repo, falling back to newest prerelease..."
               list_json=$(curl -fsSL "$list_api" 2>/dev/null || echo '[]')
-              json=$(echo "$list_json" | jq '[.[] | select(.prerelease==true and .draft==false)][0]')
-              asset_count=$(echo "$json" | jq -r '(.assets // []) | length' 2>/dev/null || echo 0)
-            fi
-
-            if [ "$asset_count" = "0" ]; then
-              echo "ERROR: No release assets found for $repo"
-              exit 1
+              json=$(echo "$list_json" | jq '[.[] | select(.prerelease==true and .draft==false)][0]' 2>/dev/null || echo 'null')
             fi
 
             # Decide: new-style (.assets array) or legacy (.output_name single).
             has_assets=$(jq -r ".releases[\"$repo\"] | has(\"assets\")" "$CFG")
 
             if [ "$has_assets" = "true" ]; then
-              # New style — iterate the assets array; match by exact name then regex.
+              # New style — iterate the configured assets array, match by exact name then regex.
               while IFS=$'\t' read -r match outname; do
                 url=$(echo "$json" | jq -r --arg m "$match" \
-                  '.assets[] | select(.name == $m) | .browser_download_url' | head -n 1)
+                  '(.assets // [])[] | select(.name == $m) | .browser_download_url' 2>/dev/null | head -n 1)
                 if [ -z "$url" ]; then
                   url=$(echo "$json" | jq -r --arg m "$match" \
-                    '.assets[] | select(.name | test($m)) | .browser_download_url' | head -n 1)
+                    '(.assets // [])[] | select(.name | test($m)) | .browser_download_url' 2>/dev/null | head -n 1)
                 fi
                 if [ -z "$url" ]; then
                   echo "ERROR: Asset matching '$match' not found in release for $repo"
                   echo "Available assets:"
-                  echo "$json" | jq -r '.assets[].name'
+                  echo "$json" | jq -r '(.assets // [])[] | .name' 2>/dev/null || echo "  (none)"
                   exit 1
                 fi
                 if [ -z "$outname" ] || [ "$outname" = "null" ]; then
@@ -371,9 +370,9 @@ jobs:
                 curl -L -o "external_wgts/$outname" "$url"
               done < <(jq -r ".releases[\"$repo\"].assets[] | [.match, (.output_name // \"\")] | @tsv" "$CFG")
             else
-              # Legacy style — first asset only, single output_name.
+              # Legacy style — first non-empty URL across all assets (matches old behavior).
               outname=$(jq -r ".releases[\"$repo\"].output_name" "$CFG")
-              url=$(echo "$json" | jq -r '.assets[0].browser_download_url // empty')
+              url=$(echo "$json" | jq -r '(.assets // [])[] | .browser_download_url // empty' 2>/dev/null | head -n 1)
               if [ -z "$url" ]; then
                 echo "ERROR: No release asset found for $repo (latest or prerelease)."
                 exit 1
