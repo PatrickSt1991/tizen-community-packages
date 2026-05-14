@@ -35,8 +35,8 @@
     "PatrickSt1991/NuvioWeb": {
       "branch": "main",
       "assets": [
-        { "match": "Nuvio-Hosted.wgt",     "output_name": "Nuvio-Hosted.wgt" },
-        { "match": "Nuvio-SelfHosted.wgt", "output_name": "Nuvio-SelfHosted.wgt" }
+        { "match": "Nuvio-Hosted.wgt",     "output_name": "Nuvio-Web.wgt" },
+        { "match": "Nuvio-SelfHosted.wgt", "output_name": "Nuvio-Native.wgt" }
       ]
     }
   },
