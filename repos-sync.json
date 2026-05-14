@@ -1,5 +1,5 @@
 {
-  "releases": { 
+  "releases": {
     "brightcraft/moonlight-tizen": {
       "branch": "release",
       "output_name": "Moonlight-Tizen.wgt"
@@ -29,12 +29,15 @@
       "output_name": "Doom.wgt"
     },
     "dos-ise/openttd-tizen": {
-       "branch": "release",
-       "output_name": "TransportTycoonDeluxe.wgt"
+      "branch": "release",
+      "output_name": "TransportTycoonDeluxe.wgt"
     },
     "PatrickSt1991/NuvioWeb": {
       "branch": "main",
-      "output_name": "Nuvio.wgt"
+      "assets": [
+        { "match": "Nuvio-Hosted.wgt",     "output_name": "Nuvio-Hosted.wgt" },
+        { "match": "Nuvio-SelfHosted.wgt", "output_name": "Nuvio-SelfHosted.wgt" }
+      ]
     }
   },
   "direct": {
