@@ -21,13 +21,11 @@ env:
   NODE_OPTIONS: --openssl-legacy-provider
 
 jobs:
-
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
       has_changes: ${{ steps.check.outputs.has_changes }}
       changes_summary: ${{ steps.check.outputs.changes_summary }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -43,11 +41,9 @@ jobs:
           FORCE: ${{ inputs.force }}
         run: |
           set -e
-
           STATE_FILE=".github/state/last_seen.json"
           mkdir -p .github/state
           [ -f "$STATE_FILE" ] || echo '{}' > "$STATE_FILE"
-
           old_state=$(cat "$STATE_FILE")
           new_state='{}'
           summary=""
@@ -129,6 +125,7 @@ jobs:
           fi
 
           echo "$new_state" | jq '.' > new_last_seen.json
+
           echo "--- new state ---"
           cat new_last_seen.json
           echo "--- summary ---"
@@ -148,12 +145,10 @@ jobs:
           name: last-seen-state
           path: new_last_seen.json
 
-
   prepare:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.has_changes == 'true'
-
     steps:
       - uses: actions/checkout@v4
 
@@ -195,12 +190,10 @@ jobs:
             -c NL -s Community -ct World \
             -o "$CERT_NAME" -n "$CERT_NAME" \
             -e community@example.org -f "$CERT_NAME"
-
           ./tizen-studio/tools/ide/bin/tizen security-profiles add \
             -n "$CERT_NAME" \
             -a "./tizen-studio-data/keystore/author/${CERT_NAME}.p12" \
             -p "$CERT_PASSWORD"
-
           ./tizen-studio/tools/ide/bin/tizen cli-config \
             "profiles.path=./tizen-studio-data/profile/profiles.xml"
 
@@ -229,60 +222,49 @@ jobs:
           name: package-exp-artifact
           path: package.exp
 
-
   generate-matrix-build:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.has_changes == 'true'
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-
     steps:
       - uses: actions/checkout@v4
-
       - id: set-matrix
         run: |
           matrix=$(jq -c \
             '{include: [to_entries[] | {
-               repo: .key,
-               repo_id: (.key | gsub("/"; "-")),
-               branch: .value.branch,
-               project_path: (.value.project_path // "."),
-               output_name: (.value.output_name // "")
+              repo: .key,
+              repo_id: (.key | gsub("/"; "-")),
+              branch: .value.branch,
+              project_path: (.value.project_path // "."),
+              output_name: (.value.output_name // "")
             }]}' repos-build.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
 
   tizen-build:
     runs-on: ubuntu-latest
     needs: [prepare, generate-matrix-build]
-
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.generate-matrix-build.outputs.matrix).include }}
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           name: tizen-studio-artifact
           path: tizen-studio
-
       - uses: actions/download-artifact@v4
         with:
           name: package-exp-artifact
           path: .
-
       - name: Fix Tizen Studio permissions
         run: chmod -R +x tizen-studio
-
       - name: Install expect
         run: |
           sudo apt-get update
           sudo apt-get install -y expect
-
       - name: Build Tizen Web Project
         shell: bash
         env:
@@ -291,37 +273,27 @@ jobs:
           set -e
           mkdir -p build wgt_files
           cd build
-
           git clone --depth 1 --branch "${{ matrix.branch }}" "https://github.com/${{ matrix.repo }}.git"
           cd "$(basename "${{ matrix.repo }}")"
-
           cd "${{ matrix.project_path }}"
-
           echo "Building in: $(pwd)"
           "$TIZEN_PATH/tools/ide/bin/tizen" build-web
-
           echo "Packaging..."
           expect "$GITHUB_WORKSPACE/package.exp" "$(pwd)"
-
           actual=$(ls *.wgt | head -n 1)
           desired="${{ matrix.output_name }}"
-
           if [ -z "$desired" ] || [ "$desired" = "null" ]; then
             desired="$actual"
           fi
-
           cp "$actual" "$GITHUB_WORKSPACE/wgt_files/$desired"
-
       - uses: actions/upload-artifact@v4
         with:
           name: built-wgts-${{ matrix.repo_id }}
           path: wgt_files/
 
-
   external-downloads:
     runs-on: ubuntu-latest
     needs: tizen-build
-
     steps:
       - uses: actions/checkout@v4
 
@@ -352,37 +324,66 @@ jobs:
           repos=$(jq -r '.releases | to_entries[] | .key' "$CFG")
 
           for repo in $repos; do
-            outname=$(jq -r ".releases[\"$repo\"].output_name" "$CFG")
-
             latest_api="https://api.github.com/repos/$repo/releases/latest"
             list_api="https://api.github.com/repos/$repo/releases?per_page=20"
 
             echo "Fetching release for $repo ..."
 
-            # 1) Try "latest" (non-prerelease)
-            json=$(curl -fsSL "$latest_api" 2>/dev/null || true)
+            # 1) Try /releases/latest (non-prerelease).
+            json=$(curl -fsSL "$latest_api" 2>/dev/null || echo '')
+            asset_count=$(echo "$json" | jq -r '(.assets // []) | length' 2>/dev/null || echo 0)
 
-            # If /latest didn't work or has no assets, fallback to newest prerelease from /releases
-            url=$(echo "$json" | jq -r '.assets[].browser_download_url // empty' | head -n 1)
-            if [ -z "$url" ]; then
-              echo "No /latest asset found for $repo, falling back to newest prerelease..."
-              json=$(curl -fsSL "$list_api")
-
-              # pick the newest prerelease (first match in the releases list)
-              url=$(echo "$json" | jq -r '[.[] | select(.prerelease==true and .draft==false) ][0].assets[0].browser_download_url // empty')
+            # 2) Fallback to newest non-draft prerelease if /latest had no assets.
+            if [ "$asset_count" = "0" ]; then
+              echo "  No /latest assets for $repo, falling back to newest prerelease..."
+              list_json=$(curl -fsSL "$list_api" 2>/dev/null || echo '[]')
+              json=$(echo "$list_json" | jq '[.[] | select(.prerelease==true and .draft==false)][0]')
+              asset_count=$(echo "$json" | jq -r '(.assets // []) | length' 2>/dev/null || echo 0)
             fi
 
-            if [ -z "$url" ]; then
-              echo "ERROR: No release asset found for $repo (latest or prerelease)."
+            if [ "$asset_count" = "0" ]; then
+              echo "ERROR: No release assets found for $repo"
               exit 1
             fi
 
-            if [ -z "$outname" ] || [ "$outname" = "null" ]; then
-              outname="$(basename "$url")"
-            fi
+            # Decide: new-style (.assets array) or legacy (.output_name single).
+            has_assets=$(jq -r ".releases[\"$repo\"] | has(\"assets\")" "$CFG")
 
-            echo "Downloading $url -> external_wgts/$outname"
-            curl -L -o "external_wgts/$outname" "$url"
+            if [ "$has_assets" = "true" ]; then
+              # New style — iterate the assets array; match by exact name then regex.
+              while IFS=$'\t' read -r match outname; do
+                url=$(echo "$json" | jq -r --arg m "$match" \
+                  '.assets[] | select(.name == $m) | .browser_download_url' | head -n 1)
+                if [ -z "$url" ]; then
+                  url=$(echo "$json" | jq -r --arg m "$match" \
+                    '.assets[] | select(.name | test($m)) | .browser_download_url' | head -n 1)
+                fi
+                if [ -z "$url" ]; then
+                  echo "ERROR: Asset matching '$match' not found in release for $repo"
+                  echo "Available assets:"
+                  echo "$json" | jq -r '.assets[].name'
+                  exit 1
+                fi
+                if [ -z "$outname" ] || [ "$outname" = "null" ]; then
+                  outname="$(basename "$url")"
+                fi
+                echo "Downloading $url -> external_wgts/$outname"
+                curl -L -o "external_wgts/$outname" "$url"
+              done < <(jq -r ".releases[\"$repo\"].assets[] | [.match, (.output_name // \"\")] | @tsv" "$CFG")
+            else
+              # Legacy style — first asset only, single output_name.
+              outname=$(jq -r ".releases[\"$repo\"].output_name" "$CFG")
+              url=$(echo "$json" | jq -r '.assets[0].browser_download_url // empty')
+              if [ -z "$url" ]; then
+                echo "ERROR: No release asset found for $repo (latest or prerelease)."
+                exit 1
+              fi
+              if [ -z "$outname" ] || [ "$outname" = "null" ]; then
+                outname="$(basename "$url")"
+              fi
+              echo "Downloading $url -> external_wgts/$outname"
+              curl -L -o "external_wgts/$outname" "$url"
+            fi
           done
 
       - name: Download direct WGT URLs
@@ -392,11 +393,9 @@ jobs:
           jq -r '.direct | to_entries[] | "\(.key) \(.value.url // .value) \(.value.output_name // "")"' "$CFG" |
           while read repo url outname; do
             [ -n "$repo" ] || continue
-
             if [ -z "$outname" ] || [ "$outname" = "null" ]; then
               outname="${repo##*/}.wgt"
             fi
-
             curl -L -o "external_wgts/$outname" "$url"
           done
 
@@ -405,19 +404,15 @@ jobs:
           name: external-wgts
           path: external_wgts/
 
-
   publish-release:
     runs-on: ubuntu-latest
     needs: [detect-changes, tizen-build, external-downloads]
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           pattern: built-wgts-*
           path: built
-
       - uses: actions/download-artifact@v4
         with:
           name: external-wgts
@@ -436,7 +431,7 @@ jobs:
           TAG: "community-${{ github.run_number }}"
         run: |
           set -e
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists on origin — reusing it."
@@ -459,26 +454,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
   update-state:
     runs-on: ubuntu-latest
     needs: [detect-changes, publish-release]
     if: success() && needs.detect-changes.outputs.has_changes == 'true'
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           name: last-seen-state
           path: .state-download
-
       - name: Commit updated state
         run: |
           set -e
           mkdir -p .github/state
           mv .state-download/new_last_seen.json .github/state/last_seen.json
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/state/last_seen.json
           if git diff --cached --quiet; then
