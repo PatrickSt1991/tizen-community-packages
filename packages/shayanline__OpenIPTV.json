@@ -1,0 +1,13 @@
+{
+  "name": "OpenIPTV",
+  "description": "Privacy focused IPTV player for Samsung Tizen TVs with extended M3U playlists, favourites and search.",
+  "repo": "shayanline/OpenIPTV",
+  "source": "release",
+  "branch": "master",
+  "assets": [
+    {
+      "match": "OpenIPTV.wgt",
+      "output_name": "OpenIPTV.wgt"
+    }
+  ]
+}
